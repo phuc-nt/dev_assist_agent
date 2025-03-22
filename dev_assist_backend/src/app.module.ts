@@ -4,6 +4,7 @@ import { UserModule } from './user/user.module';
 import { User } from './entity/User';
 import { ConfigModule } from '@nestjs/config';
 import { ChatModule } from './chat/chat.module';
+import { SlackModule } from './slack/slack.module';
 
 @Module({
   imports: [
@@ -13,13 +14,14 @@ import { ChatModule } from './chat/chat.module';
       host: 'localhost',
       port: 3306,
       username: 'root',
-      password: '',
+      password: 'Hung@123123',
       database: 'dev-assist',
       entities: [User],
       synchronize: true, // Chỉ dùng trong môi trường dev, không nên bật ở production
     }),
     UserModule,
     ChatModule,
+    SlackModule,
   ],
 })
 export class AppModule {}
