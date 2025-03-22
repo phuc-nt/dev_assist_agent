@@ -4,6 +4,7 @@ import { UserModule } from './user/user.module';
 import { User } from './entity/User';
 import { ConfigModule } from '@nestjs/config';
 import { ChatModule } from './chat/chat.module';
+import { JiraModule } from './jira/jira.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ChatModule } from './chat/chat.module';
     }),
     UserModule,
     ChatModule,
+    JiraModule,
   ],
 })
 export class AppModule {}
