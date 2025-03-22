@@ -7,7 +7,8 @@ export class SlackController {
 
   @Get('fetch-messages')
   async fetchMessages(@Query('query') query: string, @Query('channelId') channelId: string) {
-    const messages = await this.slackService.exec(query);
+    const messages = await this.slackService.processUserRequest(query);
     return { messages };
   }
 }
+
