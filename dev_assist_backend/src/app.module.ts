@@ -5,6 +5,7 @@ import { User } from './entity/User';
 import { ConfigModule } from '@nestjs/config';
 import { ChatModule } from './chat/chat.module';
 import { JiraModule } from './jira/jira.module';
+import { SlackModule } from './slack/slack.module';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { JiraModule } from './jira/jira.module';
       host: 'localhost',
       port: 3306,
       username: 'root',
-      password: '',
+      password: 'Hung@123123',
       database: 'dev-assist',
       entities: [User],
       synchronize: true, // Chỉ dùng trong môi trường dev, không nên bật ở production
@@ -22,6 +23,7 @@ import { JiraModule } from './jira/jira.module';
     UserModule,
     ChatModule,
     JiraModule,
+    SlackModule,
   ],
 })
 export class AppModule {}
