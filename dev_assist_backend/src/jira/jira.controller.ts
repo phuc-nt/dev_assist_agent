@@ -6,6 +6,11 @@ import { IssueData } from './interfaces';
 export class JiraController {
   constructor(private readonly jiraService: JiraService) {}
 
+  @Post('chat')
+  async chatJira(@Body() requestBody: { message: string }) {
+    return this.jiraService.chatJira(requestBody.message);
+  }
+
   @Get('user/:projectIdOrKey')
   async getUserData(@Param('projectIdOrKey') projectIdOrKey: string) {
     return this.jiraService.getUserData(projectIdOrKey);

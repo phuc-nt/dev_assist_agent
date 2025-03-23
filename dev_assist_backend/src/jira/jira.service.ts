@@ -10,20 +10,38 @@ import {
   RoleData,
   UserData,
 } from './interfaces';
-
+import { OpenaiService } from '../openai/openai.service';
 @Injectable()
 export class JiraService {
   private readonly host: string;
   private readonly email: string;
   private readonly apiToken: string;
+  private readonly jiraInstructionPrompt: string;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
+    private readonly openaiService: OpenaiService,
   ) {
     this.host = this.configService.get<string>('JIRA_HOST');
     this.email = this.configService.get<string>('JIRA_EMAIL');
     this.apiToken = this.configService.get<string>('JIRA_API_TOKEN');
+
+    // Lấy instruction prompt và thay thế biến môi trường
+    const promptTemplate = this.configService.get<string>(
+      'JIRA_INSTRUCTION_PROMPT',
+    );
+    this.jiraInstructionPrompt = promptTemplate.replace(
+      '${JIRA_HOST}',
+      this.host,
+    );
+  }
+  async chatJira(message: string): Promise<any> {
+    const response = await this.openaiService.chatWithFunctionCalling(
+      this.jiraInstructionPrompt,
+      message,
+    );
+    return response;
   }
 
   async getUserData(projectIdOrKey: string): Promise<any> {
@@ -135,7 +153,7 @@ export class JiraService {
       // Tách dữ liệu cho trường fields
       const fieldsData = {
         project: {
-          id: issueData.projectId,
+          key: issueData.projectId,
         },
         issuetype: {
           id: issueData.issueTypeId,
