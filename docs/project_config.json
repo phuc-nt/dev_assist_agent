@@ -1,0 +1,28 @@
+{
+  "jira": {
+    "domain": "https://phuc-nt.atlassian.net",
+    "projectKey": "XDEMO2"
+  },
+  "confluence": {
+    "domain": "https://phuc-nt.atlassian.net",
+    "spaceKey": "TX"
+  },
+  "slack": {
+    "teamId": "T07UZEWG7A9",
+    "projectChannel": "C08JFTGTN2K"
+  },
+  "projectMembers": [
+    {
+      "name": "Phúc",
+      "email": "phucnt0@gmail.com"
+    },
+    {
+      "name": "Hưng",
+      "email": "ng.duchungbmt@gmail.com"
+    },
+    {
+      "name": "Đăng",
+      "email": "mrburgundy2911@gmail.com"
+    }
+  ]
+}
