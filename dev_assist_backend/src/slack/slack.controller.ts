@@ -1,14 +1,19 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Res } from '@nestjs/common';
 import { SlackService } from './slack.service';
+import { Response } from 'express';
 
 @Controller('slack')
 export class SlackController {
   constructor(private readonly slackService: SlackService) {}
 
-  @Get('fetch-messages')
-  async fetchMessages(@Query('query') query: string, @Query('channelId') channelId: string) {
-    const messages = await this.slackService.processUserRequest(query);
-    return { messages };
+  @Post('stream')
+  async getChatStream(@Body() body: { message: string }, @Res() res: Response) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const stream = await this.slackService.processUserRequest(body.message);  
+    stream.pipe(res); // Trả về stream response
   }
 }
 
