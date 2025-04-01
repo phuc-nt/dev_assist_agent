@@ -93,26 +93,27 @@ Không cần tham số, chỉ cần gọi API GET
 - Nên gọi API GET transitions trước để xác định chính xác transition ID, đặc biệt khi làm việc với nhiều dự án
 - Việc chuyển trạng thái có thể ảnh hưởng đến assignee của issue (ví dụ: tự động gán lại)
 
-## Test Case 3: Tìm kiếm issue
-**Mục tiêu:** Kiểm tra khả năng tìm kiếm và truy xuất thông tin issue  
+## Test Case 3: Tìm kiếm tin nhắn
+**Mục tiêu:** Kiểm tra khả năng tìm kiếm và truy xuất thông tin tin nhắn trong channel  
 **Input (Câu lệnh tiếng Việt):**
 ```
-Tìm tất cả các issue có chứa từ khóa "đăng nhập" trong dự án XDEMO2
+Tìm tất cả các tin nhắn có chứa từ khóa "đăng nhập" trong dự án XDEMO2
 ```
+
+**Bot Token Scopes cần thiết:**
+- `channels:history` - Cho phép bot xem tin nhắn trong các kênh công khai
+- `channels:read` - Cho phép bot truy xuất danh sách các kênh công khai
 
 **Expected API Params:**
 ```
-jql=project=XDEMO2 AND text ~ "đăng nhập"&fields=key,summary,status,assignee
-```
-
-**Encoded URL:**
-```
-https://phuc-nt.atlassian.net/rest/api/2/search?jql=project=XDEMO2%20AND%20text%20~%20%22%C4%91%C4%83ng%20nh%E1%BA%ADp%22&fields=key,summary,status,assignee
+channel=C08JFTGTN2K
+limit=100 (hoặc số lượng tin nhắn cần tìm)
 ```
 
 **API Endpoint:**
-- URL: `https://phuc-nt.atlassian.net/rest/api/2/search`
+- URL: `https://slack.com/api/conversations.history`
 - Method: GET
+- Headers: `Authorization: Bearer xoxb-your-token`
 
 **Chú thích triển khai:**
 - Agent cần tạo câu truy vấn JQL (JIRA Query Language) từ câu lệnh tiếng Việt
