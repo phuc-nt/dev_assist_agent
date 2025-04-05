@@ -9,9 +9,10 @@ export interface MetaResponseData {
 
 export interface IssueData {
   issueTypeId: string;
-  projectId: string;
+  project: string;
   summary: string;
   reporterAccountId: string;
+  description?: string;
   // Các thuộc tính khác nếu có
 }
 
@@ -26,4 +27,9 @@ export interface UserData {
   actorUser: {
     accountId: string;
   };
+}
+
+export interface ChatMessage {
+  role: string;
+  content: string;
 }

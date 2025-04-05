@@ -1,14 +1,14 @@
 import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
 import { JiraService } from './jira.service';
-import { IssueData } from './interfaces';
+import { IssueData, ChatMessage } from './interfaces';
 
 @Controller('jira')
 export class JiraController {
   constructor(private readonly jiraService: JiraService) {}
 
   @Post('chat')
-  async chatJira(@Body() requestBody: { message: string }) {
-    return this.jiraService.chatJira(requestBody.message);
+  async chatJira(@Body() requestBody: { messages?: ChatMessage[] }): Promise<{ history: ChatMessage[], response: string }> {
+    return this.jiraService.chatJira(requestBody.messages);
   }
 
   @Get('user/:projectIdOrKey')
@@ -26,7 +26,7 @@ export class JiraController {
     return this.jiraService.getIssueDetails(issueIdOrKey);
   }
 
-  @Get('issue/createmeta/issue-type/:projectIdOrKey')
+  @Get('  ')
   async getIssueTypeCreationMeta(
     @Param('projectIdOrKey') projectIdOrKey: string,
   ) {
