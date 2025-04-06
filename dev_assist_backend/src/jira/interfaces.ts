@@ -13,6 +13,7 @@ export interface IssueData {
   summary: string;
   reporterAccountId: string;
   description?: string;
+  priorityName?: string;
   // Các thuộc tính khác nếu có
 }
 

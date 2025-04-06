@@ -13,6 +13,8 @@ import {
 } from './interfaces';
 import { OpenAI } from 'openai';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { JIRA_INSTRUCTION_PROMPT } from '../config/jira.config';
+import { Response } from 'express';
 
 @Injectable()
 export class JiraService {
@@ -38,166 +40,155 @@ export class JiraService {
     });
     this.openaiModel = 'gpt-4o';
 
-    // Lấy instruction prompt và thay thế biến môi trường
-    const promptTemplate = this.configService.get<string>(
-      'JIRA_INSTRUCTION_PROMPT',
-    );
-    this.jiraInstructionPrompt = promptTemplate.replace(
+    // Use the imported instruction prompt and replace any environment variables if needed
+    this.jiraInstructionPrompt = JIRA_INSTRUCTION_PROMPT.replace(
       '${JIRA_HOST}',
       this.host,
     );
   }
 
-  async chatJira(userMessages: ChatMessage[]): Promise<{ history: ChatMessage[], response: string }> {
+  async chatJiraStream(userMessages: ChatMessage[], response: Response): Promise<void> {
     try {
+      this.logger.log(`Starting new Jira chat stream session with ${userMessages.length} messages`);
       const systemPrompt = this.jiraInstructionPrompt;
-      console.log(userMessages);
       const messages: ChatCompletionMessageParam[] = [
         { role: 'system', content: systemPrompt },
-        ...userMessages.map(msg => ({ 
-          role: msg.role as 'user' | 'assistant', 
-          content: msg.content 
+        ...userMessages.map(msg => ({
+          role: msg.role as 'user' | 'assistant',
+          content: msg.content
         })),
       ];
 
-      const response = await this.openai.chat.completions.create({
-        model: this.openaiModel,
-        messages,
-        tools: functions.map(func => ({
-          type: "function",
-          function: func
-        })
-        ),
-        tool_choice: 'auto',
-      });
+      let currentMessages = messages;
+      let hasToolCalls = true;
+      let iterationCount = 0;
 
-      const responseMessage = response.choices[0].message;
-      if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
-        const toolCallMessages: ChatCompletionMessageParam[] = [
-          { role: 'system', content: systemPrompt },
-          ...userMessages.map(msg => ({ 
-            role: msg.role as 'user' | 'assistant', 
-            content: msg.content 
+      // Keep processing tool calls until there are none left
+      while (hasToolCalls) {
+        iterationCount++;
+        this.logger.log(`Chat iteration #${iterationCount}: Calling OpenAI API`);
+
+        // Send event that we're calling OpenAI
+        response.write(`data: {"type": "progress", "message": "Calling AI model for iteration #${iterationCount}"}\n\n`);
+
+        const openaiResponse = await this.openai.chat.completions.create({
+          model: this.openaiModel,
+          messages: currentMessages,
+          tools: functions.map(func => ({
+            type: "function",
+            function: func
           })),
-          responseMessage,
-        ];
-        
-        console.log(responseMessage.tool_calls);
+          tool_choice: 'auto',
+        });
+
+        const responseMessage = openaiResponse.choices[0].message;
+
+        // If no tool calls, return the content directly and end stream
+        if (!responseMessage.tool_calls || responseMessage.tool_calls.length === 0) {
+          this.logger.log(`Chat completed with no tool calls required after ${iterationCount} iterations`);
+          response.write(`data: {"type": "complete", "message": ${JSON.stringify(responseMessage.content)}}\n\n`);
+          response.end();
+          return;
+        }
+
+        // Process tool calls
+        currentMessages = [...currentMessages, responseMessage];
+        this.logger.log(`Processing ${responseMessage.tool_calls.length} tool calls in iteration #${iterationCount}`);
+
         // Process each tool call
         for (const toolCall of responseMessage.tool_calls) {
           const functionName = toolCall.function.name;
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           const functionArgs = JSON.parse(toolCall.function.arguments);
 
+          this.logger.log(`Executing function: ${functionName} with args: ${JSON.stringify(functionArgs)}`);
+
+          // Send event that we're executing a specific function
+          response.write(`data: {"type": "function_call", "function": "${functionName}", "args": ${JSON.stringify(functionArgs)}}\n\n`);
+
           let result;
           if (functionName === 'searchIssues') {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-            result = await this.searchIssues(functionArgs.query);
+            result = await this.searchIssuesUsingPlainText(functionArgs.query);
+            this.logger.log(`searchIssuesUsingPlainText completed with query: "${functionArgs.query}"`);
+          } else if (functionName === 'searchIssuesUsingJQL') {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            result = await this.searchIssuesUsingJQL(functionArgs.jql);
+            this.logger.log(`searchIssuesUsingJQL completed with JQL: "${functionArgs.jql}"`);
           } else if (functionName === 'getProjects') {
             result = await this.getProjects();
+            this.logger.log('getProjects completed');
           } else if (functionName === 'createIssue') {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             result = await this.createIssue(functionArgs);
+            this.logger.log(`createIssue completed for project: "${functionArgs.project}" with summary: "${functionArgs.summary}"`);
           } else if (functionName === 'getUserData') {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             result = await this.getUserData(functionArgs.projectIdOrKey);
+            this.logger.log(`getUserData completed for project: "${functionArgs.projectIdOrKey}"`);
           } else if (functionName === 'getIssueDetails') {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             result = await this.getIssueDetails(functionArgs.issueIdOrKey);
+            this.logger.log(`getIssueDetails completed for issue: "${functionArgs.issueIdOrKey}"`);
           } else if (functionName === 'getIssueTypeCreationMeta') {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             result = await this.getIssueTypeCreationMeta(functionArgs.projectIdOrKey);
+            this.logger.log(`getIssueTypeCreationMeta completed for project: "${functionArgs.projectIdOrKey}"`);
           } else if (functionName === 'getIssueCreationMeta') {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
             result = await this.getIssueCreationMeta(
               functionArgs.projectIdOrKey,
               functionArgs.issueTypeId
             );
+            this.logger.log(`getIssueCreationMeta completed for project: "${functionArgs.projectIdOrKey}" and issueType: "${functionArgs.issueTypeId}"`);
+          } else if (functionName === 'getIssueTransitions') {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            result = await this.getIssueTransitions(functionArgs.issueIdOrKey);
+            this.logger.log(`getIssueTransitions completed for issue: "${functionArgs.issueIdOrKey}"`);
+          } else if (functionName === 'transitionIssue') {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            result = await this.transitionIssue(
+              functionArgs.issueIdOrKey,
+              functionArgs.transitionId
+            );
+            this.logger.log(`transitionIssue completed for issue: "${functionArgs.issueIdOrKey}" with transitionId: "${functionArgs.transitionId}"`);
+          } else if (functionName === 'assignIssue') {
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+            result = await this.assignIssue(
+              functionArgs.issueIdOrKey,
+              functionArgs.accountId
+            );
+            this.logger.log(`assignIssue completed for issue: "${functionArgs.issueIdOrKey}" with accountId: "${functionArgs.accountId}"`);
           } else {
             // Process other functions if any
+            this.logger.warn(`Unknown function called: ${functionName}`);
+            response.write(`data: {"type": "error", "message": "Unknown function called: ${functionName}"}\n\n`);
             continue;
           }
 
+          // Send event with the function result
+          response.write(`data: {"type": "function_result", "function": "${functionName}", "result": ${JSON.stringify(result)}}\n\n`);
+
           // Add the result to the messages array
-          toolCallMessages.push({
+          currentMessages.push({
             role: 'tool',
             tool_call_id: toolCall.id,
             content: JSON.stringify(result),
           });
         }
-
-        // Call OpenAI again with all results from the functions
-        const secondResponse = await this.openai.chat.completions.create({
-          model: this.openaiModel,
-          messages: toolCallMessages,
-        });
-
-        const assistantResponse = secondResponse.choices[0].message.content;
-        
-        // Create a new ChatMessage for the assistant's response
-        const newAssistantMessage: ChatMessage = {
-          role: 'assistant',
-          content: assistantResponse
-        };
-        
-        // Create history including tool calls and their results
-        const toolCallsHistory: ChatMessage[] = [];
-        
-        // Add the initial assistant response with tool calls
-        toolCallsHistory.push({
-          role: 'assistant',
-          content: JSON.stringify({
-            tool_calls: responseMessage.tool_calls.map(tc => ({
-              name: tc.function.name,
-              arguments: JSON.parse(tc.function.arguments)
-            }))
-          })
-        });
-        
-        // Add tool results
-        for (let i = 0; i < responseMessage.tool_calls.length; i++) {
-          const toolCall = responseMessage.tool_calls[i];
-          const toolResult = toolCallMessages.find(m => 
-            m.role === 'tool' && m.tool_call_id === toolCall.id
-          );
-          
-          if (toolResult) {
-            toolCallsHistory.push({
-              role: 'tool',
-              content: typeof toolResult.content === 'string' 
-                ? toolResult.content 
-                : JSON.stringify(toolResult.content)
-            });
-          }
-        }
-        
-        // Return both history and response
-        return {
-          history: [...userMessages, ...toolCallsHistory, newAssistantMessage],
-          response: assistantResponse
-        };
       }
 
-      const assistantResponse = responseMessage.content;
-      
-      // Create a new ChatMessage for the assistant's response
-      const newAssistantMessage: ChatMessage = {
-        role: 'assistant',
-        content: assistantResponse
-      };
-      
-      // Return both history and response
-      return {
-        history: [...userMessages, newAssistantMessage],
-        response: assistantResponse
-      };
+      // This should never be reached due to the while loop, but fallback
+      response.write(`data: {"type": "error", "message": "Unexpected end of processing"}\n\n`);
+      response.end();
+
     } catch (error) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.error(`Error with function calling: ${error.message}`);
-      throw error;
+      response.write(`data: {"type": "error", "message": "Error processing request: ${error.message}"}\n\n`);
+      response.end();
     }
   }
-
 
   async getUserData(projectIdOrKey: string): Promise<any> {
     try {
@@ -213,7 +204,6 @@ export class JiraService {
           },
         ),
       );
-
       const roles = response1.data;
       const adminRoleId = roles?.Administrator?.split('/')?.pop();
       const memberRoleId = roles?.Member?.split('/')?.pop();
@@ -283,6 +273,50 @@ export class JiraService {
     }
   }
 
+  async searchIssuesUsingPlainText(query: string): Promise<any> {
+    try {
+      const authHeader = `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`;
+      const response: AxiosResponse = await firstValueFrom(
+        this.httpService.get(`${this.host}/rest/api/3/issue/picker`, {
+          headers: {
+            Authorization: authHeader,
+            Accept: 'application/json',
+          },
+          params: {
+            query: query,
+          },
+        }),
+      );
+
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Error searching issues with plain text: ${error.message}`);
+      throw new Error('Không thể tìm kiếm các vấn đề. Vui lòng thử lại sau.');
+    }
+  }
+
+  async searchIssuesUsingJQL(jql: string): Promise<any> {
+    try {
+      const authHeader = `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`;
+      const response: AxiosResponse = await firstValueFrom(
+        this.httpService.get(`${this.host}/rest/api/3/search`, {
+          headers: {
+            Authorization: authHeader,
+            Accept: 'application/json',
+          },
+          params: {
+            jql: jql,
+          },
+        }),
+      );
+
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Error searching issues with JQL: ${error.message}`);
+      throw new Error('Không thể tìm kiếm với JQL. Vui lòng kiểm tra cú pháp JQL và thử lại.');
+    }
+  }
+
   async getIssueDetails(issueIdOrKey: string): Promise<any> {
     try {
       const authHeader = `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`;
@@ -307,7 +341,7 @@ export class JiraService {
       const authHeader = `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`;
 
       // Tách dữ liệu cho trường fields
-      const fieldsData = {
+      const fieldsData: any = {
         project: {
           key: issueData.project,
         },
@@ -320,6 +354,32 @@ export class JiraService {
         },
       };
 
+      // Add priority if provided
+      if (issueData.priorityName) {
+        fieldsData.priority = {
+          name: issueData.priorityName
+        };
+      }
+
+      // Add description if provided
+      if (issueData.description) {
+        fieldsData.description = {
+          type: 'doc',
+          version: 1,
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: issueData.description
+                }
+              ]
+            }
+          ]
+        };
+      }
+      console.log(JSON.stringify(fieldsData));
       // Tạo issue
       const response: AxiosResponse = await firstValueFrom(
         this.httpService.post(
@@ -416,6 +476,76 @@ export class JiraService {
     }
   }
 
+  async getIssueTransitions(issueIdOrKey: string): Promise<any> {
+    try {
+      const authHeader = `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`;
+      const response: AxiosResponse = await firstValueFrom(
+        this.httpService.get(`${this.host}/rest/api/3/issue/${issueIdOrKey}/transitions`, {
+          headers: {
+            Authorization: authHeader,
+            Accept: 'application/json',
+          },
+        }),
+      );
+
+      return response.data;
+    } catch (error) {
+      this.logger.error(`Error getting issue transitions: ${error.message}`);
+      throw new Error('Không thể lấy danh sách trạng thái. Vui lòng kiểm tra issue ID và quyền truy cập.');
+    }
+  }
+
+  async transitionIssue(issueIdOrKey: string, transitionId: string): Promise<any> {
+    try {
+      const authHeader = `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`;
+      const response: AxiosResponse = await firstValueFrom(
+        this.httpService.post(
+          `${this.host}/rest/api/3/issue/${issueIdOrKey}/transitions`,
+          {
+            transition: {
+              id: transitionId,
+            },
+          },
+          {
+            headers: {
+              Authorization: authHeader,
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
+      return { success: true, statusCode: response.status };
+    } catch (error) {
+      this.logger.error(`Error transitioning issue: ${error.message}`);
+      throw new Error('Không thể chuyển trạng thái issue. Vui lòng kiểm tra issue ID, transition ID và quyền truy cập.');
+    }
+  }
+
+  async assignIssue(issueIdOrKey: string, accountId: string): Promise<any> {
+    try {
+      const authHeader = `Basic ${Buffer.from(`${this.email}:${this.apiToken}`).toString('base64')}`;
+      const response: AxiosResponse = await firstValueFrom(
+        this.httpService.put(
+          `${this.host}/rest/api/3/issue/${issueIdOrKey}/assignee`,
+          {
+            accountId: accountId,
+          },
+          {
+            headers: {
+              Authorization: authHeader,
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+            },
+          },
+        ),
+      );
+      return { success: true, statusCode: response.status };
+    } catch (error) {
+      this.logger.error(`Error assigning issue: ${error.message}`);
+      throw new Error('Không thể gán người dùng cho issue. Vui lòng kiểm tra issue ID, account ID và quyền truy cập.');
+    }
+  }
 
 }
 
@@ -423,7 +553,7 @@ const functions = [
 
   {
     name: 'searchIssues',
-    description: 'Search for Jira issues by query',
+    description: 'Search for Jira issues by plain text query',
     parameters: {
       type: 'object',
       properties: {
@@ -433,6 +563,20 @@ const functions = [
         },
       },
       required: ['query'],
+    },
+  },
+  {
+    name: 'searchIssuesUsingJQL',
+    description: 'Search for Jira issues using JQL (Jira Query Language)',
+    parameters: {
+      type: 'object',
+      properties: {
+        jql: {
+          type: 'string',
+          description: 'JQL query string for searching Jira issues',
+        },
+      },
+      required: ['jql'],
     },
   },
   {
@@ -469,8 +613,12 @@ const functions = [
           type: 'string',
           description: 'Issue description',
         },
+        priorityName: {
+          type: 'string',
+          description: 'Priority name (e.g., "High", "Medium", "Low")',
+        },
       },
-      required: ['projectId', 'issueTypeId', 'summary', 'reporterAccountId'],
+      required: ['project', 'issueTypeId', 'summary', 'reporterAccountId'],
     },
   },
   {
@@ -531,6 +679,56 @@ const functions = [
         },
       },
       required: ['projectIdOrKey', 'issueTypeId'],
+    },
+  },
+  {
+    name: 'getIssueTransitions',
+    description: 'Get available transitions for a specific Jira issue',
+    parameters: {
+      type: 'object',
+      properties: {
+        issueIdOrKey: {
+          type: 'string',
+          description: 'Issue ID or key to get transitions for',
+        },
+      },
+      required: ['issueIdOrKey'],
+    },
+  },
+  {
+    name: 'transitionIssue',
+    description: 'Transition a Jira issue to a different status',
+    parameters: {
+      type: 'object',
+      properties: {
+        issueIdOrKey: {
+          type: 'string',
+          description: 'Issue ID or key to transition',
+        },
+        transitionId: {
+          type: 'string',
+          description: 'ID of the transition to perform',
+        },
+      },
+      required: ['issueIdOrKey', 'transitionId'],
+    },
+  },
+  {
+    name: 'assignIssue',
+    description: 'Assign a Jira issue to a user',
+    parameters: {
+      type: 'object',
+      properties: {
+        issueIdOrKey: {
+          type: 'string',
+          description: 'Issue ID or key to assign',
+        },
+        accountId: {
+          type: 'string',
+          description: 'Account ID of the user to assign the issue to',
+        },
+      },
+      required: ['issueIdOrKey', 'accountId'],
     },
   }
 ];
