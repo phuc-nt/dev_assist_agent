@@ -8,29 +8,70 @@ export class InputProcessor {
   
   constructor(private readonly openaiService: OpenaiService) {}
   
-  async processInput(userInput: string, context: any): Promise<string> {
-    this.logger.log(`Bắt đầu xử lý yêu cầu: "${userInput}"`);
+  /**
+   * Xử lý đầu vào từ người dùng để xác định ý định và ngữ cảnh
+   */
+  async processInput(
+    input: string,
+    context: Record<string, any> = {},
+  ): Promise<string> {
+    this.logger.log(`Đang xử lý đầu vào: ${input}`);
     
-    // Chuẩn bị prompt cho OpenAI
-    this.logger.debug('Tạo system prompt và user prompt...');
-    const systemPrompt = this.getSystemPrompt();
-    const userPrompt = this.getUserPrompt(userInput, context);
-    
-    // Gọi OpenAI API
-    this.logger.log('Gửi yêu cầu đến OpenAI API...');
-    const startTime = Date.now();
-    const response = await this.openaiService.chatWithFunctionCalling(systemPrompt, userPrompt);
-    const processingTime = Date.now() - startTime;
-    this.logger.log(`Nhận phản hồi từ OpenAI API sau ${processingTime}ms`);
-    this.logger.debug(`Phản hồi từ OpenAI: ${response.substring(0, 100)}...`);
-    
-    // Trả về kết quả phân tích
-    this.logger.log('Hoàn thành xử lý yêu cầu');
-    return response;
+    const currentConfig = this.openaiService.getLLMConfig();
+    this.logger.log(`InputProcessor sử dụng model: ${currentConfig.model}, temperature: ${currentConfig.temperature}`);
+
+    try {
+      // Lấy cấu hình prompt từ cấu hình tập trung
+      const promptConfig = this.openaiService.getPromptConfig('inputProcessor');
+      
+      if (!promptConfig) {
+        this.logger.warn('Không tìm thấy cấu hình prompt cho InputProcessor, sử dụng mặc định');
+      }
+      
+      const systemPrompt = promptConfig?.systemPrompt || this.getDefaultSystemPrompt();
+      const userPrompt = this.getUserPrompt(input, context);
+      
+      this.logger.debug('Bắt đầu gọi chatWithSystem với system prompt và user prompt');
+      // Sử dụng phương thức chat với system prompt
+      const result = await this.openaiService.chatWithSystem(systemPrompt, userPrompt);
+      
+      // Xử lý kết quả nếu cần...
+      this.logger.debug(`Kết quả xử lý: ${result.substring(0, 100)}...`);
+      
+      this.logger.log('Xử lý đầu vào thành công');
+      return result;
+    } catch (error) {
+      this.logger.error(`Lỗi khi xử lý đầu vào: ${error.message}`);
+      throw error;
+    }
   }
   
-  private getSystemPrompt(): string {
-    this.logger.debug('Tạo system prompt cho InputProcessor');
+  /**
+   * Tạo prompt cho người dùng
+   */
+  private getUserPrompt(input: string, context: Record<string, any>): string {
+    return `
+Phân tích yêu cầu sau của người dùng: "${input}"
+
+Thông tin ngữ cảnh:
+- Người dùng: ${context.user?.name || 'Không xác định'}
+- Dự án: ${context.project?.name || 'Không xác định'}
+- Lịch sử hội thoại: 
+${context.conversationHistory ? context.conversationHistory.slice(-3).map(h => `${h.role}: ${h.content}`).join('\n') : 'Không có'}
+
+Mô tả chi tiết:
+1. Ý định của người dùng và các hành động cần thiết
+2. Các thông tin cần thiết như project, timeline, status, v.v.
+3. Bất kỳ ngữ cảnh bổ sung nào
+
+Trả về mô tả dưới dạng văn bản tự nhiên, rõ ràng và đầy đủ chi tiết.
+`;
+  }
+  
+  /**
+   * System prompt mặc định nếu không tìm thấy trong cấu hình
+   */
+  private getDefaultSystemPrompt(): string {
     return `
 Bạn là một AI assistant được thiết kế để phân tích yêu cầu người dùng và chuyển thành mô tả chi tiết.
 
@@ -40,38 +81,6 @@ Với mỗi yêu cầu, hãy:
 3. Mô tả chi tiết những gì người dùng muốn thực hiện
 
 Trả về mô tả dưới dạng văn bản tự nhiên, rõ ràng và đầy đủ chi tiết.
-Ví dụ:
-Input: "tôi xong việc hôm nay rồi"
-Output:
-"Người dùng Phúc muốn báo cáo rằng họ đã hoàn thành tất cả công việc được giao trong ngày hôm nay. Họ muốn:
-1. Cập nhật trạng thái các task được giao cho họ trong dự án XDEMO2 thành "Done"
-2. Thông báo cho team về việc hoàn thành công việc
-
-Ngữ cảnh: Yêu cầu được gửi vào cuối ngày làm việc, liên quan đến dự án XDEMO2, và cần thông báo cho team."
-    `;
-  }
-  
-  private getUserPrompt(userInput: string, context: any): string {
-    this.logger.debug('Tạo user prompt với context cho InputProcessor');
-    const historyText = context.conversationHistory?.slice(-3)
-      .map(h => `${h.role}: ${h.content}`)
-      .join('\n') || 'Không có';
-      
-    return `
-Phân tích yêu cầu sau của người dùng: "${userInput}"
-
-Thông tin ngữ cảnh:
-- Người dùng: ${context.user.name}
-- Dự án: ${context.project?.key || 'Không xác định'}
-- Lịch sử hội thoại: 
-${historyText}
-
-Mô tả chi tiết:
-1. Ý định của người dùng và các hành động cần thiết
-2. Các thông tin cần thiết như project, timeline, status, v.v.
-3. Bất kỳ ngữ cảnh bổ sung nào
-
-Trả về mô tả dưới dạng văn bản tự nhiên, rõ ràng và đầy đủ chi tiết.
-    `;
+`;
   }
 } 

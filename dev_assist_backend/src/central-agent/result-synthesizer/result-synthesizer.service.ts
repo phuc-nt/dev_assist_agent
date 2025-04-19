@@ -21,19 +21,28 @@ export class ResultSynthesizerService {
     }
     
     try {
+      const currentConfig = this.openaiService.getLLMConfig();
+      this.logger.log(`ResultSynthesizer sử dụng model: ${currentConfig.model}, temperature: ${currentConfig.temperature}`);
+      
       // Tạo context cho yêu cầu
       const context = this.prepareContext(actionPlan, processedInput);
       
+      // Lấy cấu hình prompt từ cấu hình tập trung
+      const promptConfig = this.openaiService.getPromptConfig('resultSynthesizer');
+      
+      if (!promptConfig) {
+        this.logger.warn('Không tìm thấy cấu hình prompt cho ResultSynthesizer, sử dụng mặc định');
+      }
+      
       // Gọi OpenAI API để tổng hợp kết quả
-      const systemPrompt = this.getSystemPrompt();
+      const systemPrompt = promptConfig?.systemPrompt || this.getDefaultSystemPrompt();
       const userPrompt = this.getUserPrompt(context);
       
-      // Sử dụng phương thức chatWithFunctionCalling thay vì createCompletion
-      const response = await this.openaiService.chatWithFunctionCalling(
-        systemPrompt,
-        userPrompt
-      );
+      this.logger.debug('Bắt đầu gọi chatWithSystem với system prompt và user prompt');
+      // Sử dụng phương thức chatWithSystem thay vì chatWithFunctionCalling
+      const response = await this.openaiService.chatWithSystem(systemPrompt, userPrompt);
       
+      this.logger.debug(`Kết quả tổng hợp: ${response.substring(0, 100)}...`);
       this.logger.log('Đã tổng hợp kết quả thực thi thành công');
       return response;
     } catch (error) {
@@ -43,7 +52,7 @@ export class ResultSynthesizerService {
     }
   }
   
-  private getSystemPrompt(): string {
+  private getDefaultSystemPrompt(): string {
     return `
 Bạn là một AI assistant được thiết kế để tổng hợp kết quả từ nhiều bước thực thi.
 

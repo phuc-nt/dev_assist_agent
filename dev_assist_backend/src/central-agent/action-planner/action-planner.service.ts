@@ -11,10 +11,14 @@ export class ActionPlanner {
   
   async createPlan(processedInput: string): Promise<ActionPlan> {
     try {
+      const currentConfig = this.openaiService.getLLMConfig();
+      this.logger.log(`ActionPlanner sử dụng model: ${currentConfig.model}, temperature: ${currentConfig.temperature}`);
+      
       // Chuẩn bị prompt cho OpenAI
       const systemPrompt = this.getSystemPrompt();
       const userPrompt = this.getUserPrompt(processedInput);
       
+      this.logger.debug('Bắt đầu gọi chatWithFunctionCalling với system prompt và user prompt');
       // Gọi OpenAI API
       const response = await this.openaiService.chatWithFunctionCalling(systemPrompt, userPrompt);
       
@@ -31,6 +35,7 @@ export class ActionPlanner {
           throw new Error('Kết quả không hợp lệ: Thiếu hoặc định dạng steps không đúng');
         }
         
+        this.logger.debug(`Tạo kế hoạch với ${planData.steps.length} bước`);
         // Tạo ActionPlan từ dữ liệu
         const plan: ActionPlan = {
           steps: planData.steps.map(s => ({
@@ -89,6 +94,16 @@ export class ActionPlanner {
   }
   
   private getSystemPrompt(): string {
+    // Đọc cấu hình từ this.openaiService.getPromptConfig('actionPlanner')
+    const config = this.openaiService.getPromptConfig('actionPlanner');
+    if (config && config.systemPrompt) {
+      return config.systemPrompt;
+    }
+    // Thêm phương thức getDefaultSystemPrompt() để sử dụng khi không có cấu hình
+    return this.getDefaultSystemPrompt();
+  }
+  
+  private getDefaultSystemPrompt(): string {
     return `
 Bạn là một AI assistant được thiết kế để lập kế hoạch hành động từ mô tả yêu cầu.
 

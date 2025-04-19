@@ -54,6 +54,19 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 - [ ] Viết API documentation
 - [x] Kiểm thử với các kịch bản sử dụng thực tế
 
+### Phase 9: Cấu hình tập trung LLM
+- [x] Tạo file cấu hình tập trung cho LLM và prompt
+- [x] Triển khai các API endpoints để quản lý cấu hình
+- [x] Cập nhật các thành phần để sử dụng cấu hình tập trung
+- [x] Cải thiện hệ thống logging để theo dõi việc sử dụng LLM
+
+### Phase 10: Theo dõi chi phí (Cost Monitoring)
+- [ ] Tạo module theo dõi chi phí sử dụng LLM
+- [ ] Thiết kế cấu trúc dữ liệu cho việc lưu trữ thông tin sử dụng token
+- [ ] Cập nhật `OpenaiService` để theo dõi và tính toán chi phí
+- [ ] Tạo API endpoints để xem thống kê chi phí
+- [ ] Triển khai cơ chế cảnh báo khi chi phí vượt ngưỡng
+
 ## Báo cáo tiến độ
 
 ### Phiên làm việc #1: Hoàn thành Phase 1-3
@@ -104,7 +117,21 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 - Phản hồi người dùng giờ đây đã chi tiết hơn và tự nhiên hơn
 - Với các thành phần đã triển khai, Central Agent đã có thể thực hiện đầy đủ vòng lặp: Input → Plan → Execute → Result
 
-### Bài học kinh nghiệm
+### Phiên làm việc #7: Hoàn thành Phase 9
+- Đã tạo file `src/config/llm.config.ts` để tập trung quản lý các cấu hình LLM và prompt
+- Đã triển khai cấu trúc dữ liệu `LLMConfig` và `PromptConfig` để quản lý các cấu hình
+- Đã cập nhật `OpenaiService` để sử dụng cấu hình tập trung
+- Đã triển khai các API endpoints để xem và cập nhật cấu hình LLM:
+  - GET `/openai/config` - Lấy cấu hình LLM hiện tại
+  - POST `/openai/config` - Cập nhật cấu hình LLM
+  - GET `/openai/model` - Lấy thông tin model hiện tại
+  - POST `/openai/test-model` - Test model với prompt
+- Đã thêm biến môi trường `OPENAI_MODEL` để cấu hình model mặc định từ môi trường
+- Đã cập nhật tất cả các thành phần (InputProcessor, ActionPlanner, ResultSynthesizer) để sử dụng cấu hình tập trung
+- Đã cải thiện hệ thống logging để theo dõi việc sử dụng LLM trong các thành phần
+- Đã viết thêm chi tiết hướng dẫn sử dụng cấu hình tập trung trong code
+
+## Bài học kinh nghiệm
 1. **Cấu hình cổng kết nối**: Fix cứng cổng trong main.ts để tránh xung đột với các tiến trình khác
 2. **SQLite cho môi trường phát triển**: Cần đảm bảo gói `sqlite3` đã được cài đặt khi sử dụng TypeORM với SQLite
 3. **OpenAI API key**: Đảm bảo API key được cấu hình đúng trong file .env
@@ -114,10 +141,9 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 7. **Quản lý databaseId**: Đảm bảo truyền databaseId khi cập nhật kết quả thực thi để tránh tạo nhiều kế hoạch mới
 8. **Xử lý điều kiện tiếng Việt**: Cần xử lý đặc biệt đối với các điều kiện bằng tiếng Việt trong phương thức evaluateCondition
 
-## Chi tiết triển khai mới
+## Chi tiết triển khai đã hoàn thành
 
-### Result Synthesizer đã hoàn thành
-
+### Result Synthesizer
 Result Synthesizer đã được triển khai thành công với các tính năng:
 
 - Tổng hợp kết quả từ các bước thực thi thành câu trả lời mạch lạc, dễ hiểu
@@ -134,26 +160,40 @@ src/central-agent/
 │   └── result-synthesizer.spec.ts
 ```
 
-### Hoàn thiện API Documentation
+### Cấu hình tập trung LLM
+Hệ thống cấu hình tập trung LLM đã được triển khai với các tính năng:
 
-Bước tiếp theo trong kế hoạch là hoàn thiện API Documentation. Công việc này sẽ bao gồm:
+- Cấu hình model và temperature được tập trung trong một file duy nhất
+- Cấu hình prompt cho từng thành phần (InputProcessor, ActionPlanner, ResultSynthesizer, v.v.)
+- API endpoints để quản lý cấu hình động
+- Logging chi tiết về việc sử dụng model và token
+- Override cấu hình từ biến môi trường
 
-1. Tạo Swagger document đầy đủ cho tất cả API endpoints
-2. Thêm mô tả chi tiết cho các DTO và entities
-3. Tạo hướng dẫn sử dụng API cho các nhà phát triển tiếp theo
-4. Mô tả các luồng làm việc chính và cách tích hợp
+File structure triển khai:
+```
+src/
+├── config/
+│   └── llm.config.ts
+├── openai/
+│   ├── openai.service.ts
+│   └── openai.controller.ts
+```
 
-### Cải thiện hiệu suất và reliability
+## Kế hoạch tiếp theo
 
-Ngoài ra, cần thực hiện các cải tiến về hiệu suất và độ tin cậy:
+### 1. Hoàn thiện API Documentation
+- Tạo Swagger document đầy đủ cho tất cả API endpoints
+- Thêm mô tả chi tiết cho các DTO và entities
+- Tạo hướng dẫn sử dụng API cho các nhà phát triển tiếp theo
+- Mô tả các luồng làm việc chính và cách tích hợp
 
-1. Tối ưu hóa prompt để giảm chi phí token
-2. Cải thiện cơ chế retry và xử lý lỗi
-3. Thêm logging chi tiết hơn để dễ debug
-4. Tạo các kịch bản test tự động
+### 2. Cải thiện hiệu suất và reliability
+- Tối ưu hóa prompt để giảm chi phí token
+- Cải thiện cơ chế retry và xử lý lỗi
+- Thêm logging chi tiết hơn để dễ debug
+- Tạo các kịch bản test tự động
 
-## Kế hoạch tiếp theo: Sub-Agents thực
-
+### 3. Triển khai Sub-Agents thực
 Sau khi đã hoàn thiện Central Agent với mock Sub-Agents, bước tiếp theo sẽ là triển khai các Sub-Agents thực tế:
 
 1. JIRA Agent: Tích hợp với JIRA API thực tế
@@ -219,4 +259,258 @@ export class JiraAgent {
   private getSystemPrompt(): string {
     // System prompt cho JIRA agent
   }
-} 
+}
+```
+
+### 4. Triển khai Cost Monitoring
+Việc triển khai Cost Monitoring sẽ tập trung vào các khía cạnh sau:
+
+#### 4.1 Token Usage Tracking
+- Theo dõi số lượng token đầu vào và đầu ra cho mỗi lần gọi API
+- Lưu trữ thông tin về model được sử dụng, prompt, kích thước phản hồi
+- Tính toán chi phí dựa trên giá tiền cho mỗi model theo bảng giá của OpenAI
+
+#### 4.2 Cấu trúc dữ liệu
+```typescript
+interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+interface ModelCostConfig {
+  model: string;
+  promptTokenCost: number;  // USD per 1K tokens
+  completionTokenCost: number;  // USD per 1K tokens
+}
+
+interface LLMUsageRecord {
+  id: string;
+  timestamp: Date;
+  model: string;
+  component: string;  // InputProcessor, ActionPlanner, etc.
+  operation: string;  // chat, chatWithSystem, chatWithFunctionCalling
+  tokenUsage: TokenUsage;
+  cost: number;  // USD
+  metadata?: Record<string, any>;
+}
+```
+
+#### 4.3 Bảng chi phí dự kiến
+```typescript
+const MODEL_COST_CONFIG: Record<string, ModelCostConfig> = {
+  'gpt-4o': {
+    promptTokenCost: 0.01,  // $0.01 per 1K tokens
+    completionTokenCost: 0.03  // $0.03 per 1K tokens
+  },
+  'gpt-4-turbo': {
+    promptTokenCost: 0.01,
+    completionTokenCost: 0.03
+  },
+  'gpt-4.1-mini': {
+    promptTokenCost: 0.0025, 
+    completionTokenCost: 0.0075
+  },
+  'gpt-3.5-turbo': {
+    promptTokenCost: 0.0005,
+    completionTokenCost: 0.0015
+  }
+};
+```
+
+#### 4.4 Cập nhật OpenaiService
+OpenaiService sẽ được cập nhật để tính toán và lưu trữ thông tin sử dụng token:
+
+```typescript
+@Injectable()
+export class OpenaiService {
+  // ... existing code ...
+  
+  private readonly modelCostConfig: Record<string, ModelCostConfig>;
+  private readonly tokenUsageRepository: Repository<LLMUsageRecord>;
+  
+  async chat(prompt: string, component: string = 'unknown') {
+    try {
+      const startTime = Date.now();
+      
+      const response = await this.openai.chat.completions.create({
+        model: this.llmConfig.model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: this.llmConfig.temperature,
+        max_tokens: this.llmConfig.maxTokens,
+      });
+      
+      const executionTime = Date.now() - startTime;
+      
+      // Lưu thông tin sử dụng token
+      await this.trackTokenUsage({
+        model: this.llmConfig.model,
+        component,
+        operation: 'chat',
+        tokenUsage: {
+          promptTokens: response.usage.prompt_tokens,
+          completionTokens: response.usage.completion_tokens,
+          totalTokens: response.usage.total_tokens
+        },
+        executionTime
+      });
+      
+      return response.choices[0]?.message?.content || '';
+    } catch (error) {
+      // ... error handling ...
+    }
+  }
+  
+  private async trackTokenUsage(data: {
+    model: string;
+    component: string;
+    operation: string;
+    tokenUsage: TokenUsage;
+    executionTime: number;
+    metadata?: Record<string, any>;
+  }) {
+    const { model, component, operation, tokenUsage, executionTime, metadata } = data;
+    
+    // Tính chi phí dựa trên model và usage
+    const costConfig = this.modelCostConfig[model] || this.modelCostConfig['gpt-3.5-turbo'];
+    
+    const promptCost = (tokenUsage.promptTokens / 1000) * costConfig.promptTokenCost;
+    const completionCost = (tokenUsage.completionTokens / 1000) * costConfig.completionTokenCost;
+    const totalCost = promptCost + completionCost;
+    
+    // Lưu vào database
+    const usageRecord = this.tokenUsageRepository.create({
+      timestamp: new Date(),
+      model,
+      component,
+      operation,
+      tokenUsage,
+      cost: totalCost,
+      metadata: {
+        ...metadata,
+        executionTime
+      }
+    });
+    
+    await this.tokenUsageRepository.save(usageRecord);
+    
+    this.logger.log(
+      `LLM Usage - Model: ${model}, Component: ${component}, Operation: ${operation}, ` +
+      `Tokens: ${tokenUsage.totalTokens}, Cost: $${totalCost.toFixed(6)}`
+    );
+    
+    return usageRecord;
+  }
+  
+  // API endpoints để truy vấn chi phí
+  async getDailyCost(date: Date = new Date()): Promise<{ cost: number; usage: TokenUsage }> {
+    // Truy vấn chi phí theo ngày
+  }
+  
+  async getMonthlyCost(year: number, month: number): Promise<{ cost: number; usage: TokenUsage }> {
+    // Truy vấn chi phí theo tháng
+  }
+  
+  async getUsageByComponent(): Promise<Record<string, { cost: number; usage: TokenUsage }>> {
+    // Truy vấn chi phí theo component
+  }
+  
+  async getUsageByModel(): Promise<Record<string, { cost: number; usage: TokenUsage }>> {
+    // Truy vấn chi phí theo model
+  }
+}
+```
+
+#### 4.5 REST API Endpoints
+```typescript
+@Controller('cost-monitoring')
+export class CostMonitoringController {
+  constructor(private readonly costMonitoringService: CostMonitoringService) {}
+  
+  @Get('daily')
+  getDailyCost(@Query('date') dateStr: string) {
+    const date = dateStr ? new Date(dateStr) : new Date();
+    return this.costMonitoringService.getDailyCost(date);
+  }
+  
+  @Get('monthly')
+  getMonthlyCost(
+    @Query('year') yearStr: string,
+    @Query('month') monthStr: string
+  ) {
+    const year = yearStr ? parseInt(yearStr) : new Date().getFullYear();
+    const month = monthStr ? parseInt(monthStr) : new Date().getMonth() + 1;
+    return this.costMonitoringService.getMonthlyCost(year, month);
+  }
+  
+  @Get('by-component')
+  getUsageByComponent() {
+    return this.costMonitoringService.getUsageByComponent();
+  }
+  
+  @Get('by-model')
+  getUsageByModel() {
+    return this.costMonitoringService.getUsageByModel();
+  }
+}
+```
+
+#### 4.6 Cảnh báo chi phí
+```typescript
+@Injectable()
+export class CostAlertService {
+  constructor(
+    private readonly costMonitoringService: CostMonitoringService,
+    private readonly configService: ConfigService,
+    private readonly notificationService: NotificationService,
+    private readonly logger: Logger
+  ) {}
+  
+  @Cron('0 0 * * * *')  // Chạy mỗi giờ
+  async checkDailyCostThreshold() {
+    const dailyThreshold = this.configService.get<number>('DAILY_COST_THRESHOLD', 1.0);  // $1 mặc định
+    const dailyCost = await this.costMonitoringService.getDailyCost();
+    
+    if (dailyCost.cost >= dailyThreshold) {
+      this.logger.warn(`Daily cost threshold exceeded: $${dailyCost.cost} >= $${dailyThreshold}`);
+      await this.notificationService.sendAlert({
+        title: 'Cost Threshold Alert',
+        message: `Daily cost threshold exceeded: $${dailyCost.cost} >= $${dailyThreshold}`,
+        level: 'warning'
+      });
+    }
+  }
+  
+  @Cron('0 0 0 * * *')  // Chạy mỗi ngày
+  async checkMonthlyCostThreshold() {
+    const year = new Date().getFullYear();
+    const month = new Date().getMonth() + 1;
+    const monthlyThreshold = this.configService.get<number>('MONTHLY_COST_THRESHOLD', 10.0);  // $10 mặc định
+    
+    const monthlyCost = await this.costMonitoringService.getMonthlyCost(year, month);
+    
+    if (monthlyCost.cost >= monthlyThreshold) {
+      this.logger.warn(`Monthly cost threshold exceeded: $${monthlyCost.cost} >= $${monthlyThreshold}`);
+      await this.notificationService.sendAlert({
+        title: 'Cost Threshold Alert',
+        message: `Monthly cost threshold exceeded: $${monthlyCost.cost} >= $${monthlyThreshold}`,
+        level: 'warning'
+      });
+    }
+  }
+}
+```
+
+#### 4.7 Cơ chế token counting
+Để tính toán chính xác số lượng token từ prompt và completion, sẽ sử dụng thư viện tiktoken:
+```typescript
+import { encode } from 'tiktoken';
+
+export function countTokens(text: string, model: string = 'gpt-3.5-turbo'): number {
+  const encoder = encode(model);
+  const tokens = encoder.encode(text);
+  return tokens.length;
+}
+```
+
+Việc tích hợp Cost Monitoring sẽ giúp theo dõi và kiểm soát chi phí sử dụng LLM một cách hiệu quả, đồng thời cung cấp thông tin chi tiết để có thể tối ưu hóa việc sử dụng prompt và model.

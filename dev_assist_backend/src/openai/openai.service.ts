@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { OpenAI } from 'openai';
 import { FetchDataDto, FetchDataResponseDto } from './dto/fetch-data.dto';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { DEFAULT_LLM_CONFIG, LLMConfig, PromptConfig, PROMPT_CONFIGS } from '../config/llm.config';
 
 // Định nghĩa interface cho adapter
 export interface AuthAdapter {
@@ -52,7 +53,7 @@ export class NoAuthAdapter implements AuthAdapter {
 export class OpenaiService {
   private openai: OpenAI;
   private readonly logger = new Logger(OpenaiService.name);
-  private openaiModel: string;
+  private llmConfig: LLMConfig;
 
   constructor(
     private readonly configService: ConfigService,
@@ -61,15 +62,66 @@ export class OpenaiService {
     this.openai = new OpenAI({
       apiKey: this.configService.get<string>('OPENAI_API_KEY'),
     });
-    this.openaiModel = 'gpt-4o';
+    
+    this.llmConfig = { ...DEFAULT_LLM_CONFIG };
+    
+    // Cho phép override bằng biến môi trường
+    const envModel = this.configService.get<string>('OPENAI_MODEL');
+    if (envModel) {
+      this.llmConfig.model = envModel;
+    }
+    
+    this.logger.log(`Khởi tạo OpenAI Service với model: ${this.llmConfig.model}, temperature: ${this.llmConfig.temperature}`);
+  }
+
+  /**
+   * Lấy cấu hình model hiện tại
+   */
+  getLLMConfig(): LLMConfig {
+    return { ...this.llmConfig };
+  }
+  
+  /**
+   * Cập nhật cấu hình model
+   */
+  updateLLMConfig(config: Partial<LLMConfig>): void {
+    const oldModel = this.llmConfig.model;
+    const oldTemp = this.llmConfig.temperature;
+    
+    this.llmConfig = { ...this.llmConfig, ...config };
+    
+    this.logger.log(`Cập nhật cấu hình LLM: model từ [${oldModel}] thành [${this.llmConfig.model}], temperature từ [${oldTemp}] thành [${this.llmConfig.temperature}]`);
+  }
+  
+  /**
+   * Lấy cấu hình prompt theo loại
+   */
+  getPromptConfig(type: string): PromptConfig | undefined {
+    const config = PROMPT_CONFIGS[type];
+    if (config) {
+      this.logger.debug(`Đã tìm thấy cấu hình prompt cho [${type}]`);
+    } else {
+      this.logger.warn(`Không tìm thấy cấu hình prompt cho [${type}]`);
+    }
+    return config;
+  }
+
+  /**
+   * Lấy thông tin về model đang được sử dụng
+   */
+  getModel(): string {
+    return this.llmConfig.model;
   }
 
   async chat(prompt: string) {
     try {
+      this.logger.log(`Gọi OpenAI chat với model [${this.llmConfig.model}], temperature [${this.llmConfig.temperature}]`);
+      
       const response = await this.openai.chat.completions.create({
-        model: this.openaiModel,
+        model: this.llmConfig.model,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
+        temperature: this.llmConfig.temperature,
+        max_tokens: this.llmConfig.maxTokens,
       });
 
       return response.choices[0]?.message?.content || '';
@@ -80,8 +132,35 @@ export class OpenaiService {
     }
   }
 
+  /**
+   * Thực hiện chat với system prompt và user prompt
+   */
+  async chatWithSystem(systemPrompt: string, userPrompt: string) {
+    try {
+      this.logger.log(`Gọi OpenAI chatWithSystem với model [${this.llmConfig.model}], temperature [${this.llmConfig.temperature}]`);
+      
+      const response = await this.openai.chat.completions.create({
+        model: this.llmConfig.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: this.llmConfig.temperature,
+        max_tokens: this.llmConfig.maxTokens,
+      });
+
+      return response.choices[0]?.message?.content || '';
+    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      this.logger.error(`Error with system prompt chat: ${error.message}`);
+      throw error;
+    }
+  }
+
   async chatWithFunctionCalling(systemPrompt: string, userPrompt: string) {
     try {
+      this.logger.log(`Gọi OpenAI chatWithFunctionCalling với model [${this.llmConfig.model}], temperature [${this.llmConfig.temperature}]`);
+      
       const functions = [
         {
           name: 'fetchData',
@@ -120,11 +199,13 @@ export class OpenaiService {
       ];
 
       const response = await this.openai.chat.completions.create({
-        model: this.openaiModel,
+        model: this.llmConfig.model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
+        temperature: this.llmConfig.temperature,
+        max_tokens: this.llmConfig.maxTokens,
         tools: [
           {
             type: 'function',
@@ -168,10 +249,13 @@ export class OpenaiService {
           });
         }
 
+        this.logger.log(`Gọi lại OpenAI với kết quả function calls, model [${this.llmConfig.model}]`);
         // Call OpenAI again with all results from the functions
         const secondResponse = await this.openai.chat.completions.create({
-          model: this.openaiModel,
+          model: this.llmConfig.model,
           messages,
+          temperature: this.llmConfig.temperature,
+          max_tokens: this.llmConfig.maxTokens,
         });
 
         return secondResponse.choices[0].message.content;
