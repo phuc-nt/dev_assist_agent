@@ -1,23 +1,36 @@
 import { Injectable } from '@nestjs/common';
 import { OpenaiService } from '../../openai/openai.service';
+import { EnhancedLogger } from '../../utils/logger';
 
 @Injectable()
 export class InputProcessor {
+  private readonly logger = EnhancedLogger.getLogger(InputProcessor.name);
+  
   constructor(private readonly openaiService: OpenaiService) {}
   
   async processInput(userInput: string, context: any): Promise<string> {
+    this.logger.log(`Bắt đầu xử lý yêu cầu: "${userInput}"`);
+    
     // Chuẩn bị prompt cho OpenAI
+    this.logger.debug('Tạo system prompt và user prompt...');
     const systemPrompt = this.getSystemPrompt();
     const userPrompt = this.getUserPrompt(userInput, context);
     
     // Gọi OpenAI API
+    this.logger.log('Gửi yêu cầu đến OpenAI API...');
+    const startTime = Date.now();
     const response = await this.openaiService.chatWithFunctionCalling(systemPrompt, userPrompt);
+    const processingTime = Date.now() - startTime;
+    this.logger.log(`Nhận phản hồi từ OpenAI API sau ${processingTime}ms`);
+    this.logger.debug(`Phản hồi từ OpenAI: ${response.substring(0, 100)}...`);
     
     // Trả về kết quả phân tích
+    this.logger.log('Hoàn thành xử lý yêu cầu');
     return response;
   }
   
   private getSystemPrompt(): string {
+    this.logger.debug('Tạo system prompt cho InputProcessor');
     return `
 Bạn là một AI assistant được thiết kế để phân tích yêu cầu người dùng và chuyển thành mô tả chi tiết.
 
@@ -39,6 +52,7 @@ Ngữ cảnh: Yêu cầu được gửi vào cuối ngày làm việc, liên qua
   }
   
   private getUserPrompt(userInput: string, context: any): string {
+    this.logger.debug('Tạo user prompt với context cho InputProcessor');
     const historyText = context.conversationHistory?.slice(-3)
       .map(h => `${h.role}: ${h.content}`)
       .join('\n') || 'Không có';

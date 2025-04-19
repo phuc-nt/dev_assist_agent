@@ -1,0 +1,27 @@
+{
+  "id": "ac361a83-2d94-4048-be71-04ba2eef7034",
+  "userId": "user456",
+  "originalMessage": "cập nhật task XDEMO2-123 thành Done",
+  "processedInput": "Người dùng Phúc muốn thực hiện một hành động cụ thể trong dự án XDEMO2. Dưới đây là phân tích chi tiết yêu cầu của Phúc:\n\n1. **Ý định của người dùng và các hành động cần thiết:**\n   - Ý định chính của Phúc là cập nhật trạng thái của một task cụ thể trong một dự án đang thực hiện. Phúc muốn thay đổi trạng thái của task này thành \"Done\".\n   - Hành động cần thiết: Trong hệ thống quản lý dự án, người dùng cần truy cập vào task cụ thể có mã số là XDEMO2-123 và cập nhật trạng thái của nó từ trạng thái hiện tại sang \"Done\".\n  \n2. **Các thông tin cần thiết:**\n   - **Dự án:** Dự án liên quan là XDEMO2.\n   - **Task cần cập nhật:** Task có mã số XDEMO2-123.\n   - **Trạng thái cần cập nhật:** Trạng thái cần thay đổi thành \"Done\".\n   \n3. **Bất kỳ ngữ cảnh bổ sung nào:**\n   - Yêu cầu không cung cấp thông tin về thời điểm cụ thể để thực hiện cập nhật này, nhưng thường những hành động như vậy được thực hiện ngay sau khi task đã hoàn thành các yêu cầu đặt ra.\n   - Không có thêm thông tin về lý do cụ thể tại sao cần cập nhật trạng thái ngay lập tức hoặc ai cần được thông báo sau khi task này chuyển sang trạng thái \"Done\".\n   - Không có lịch sử hội thoại nào đi kèm, do đó, giả định rằng yêu cầu này độc lập và không phụ thuộc vào các yêu cầu khác.\n\nPhúc cần đảm bảo truy cập vào hệ thống quản lý dự án và thực hiện cập nhật theo yêu cầu.",
+  "plan": {
+    "steps": [
+      {
+        "id": "step1",
+        "agentType": "JIRA",
+        "prompt": "Update the status of the task with key XDEMO2-123 in project XDEMO2 to 'Done'. Ensure that all conditions for marking the task as 'Done' are met.",
+        "dependsOn": [],
+        "condition": null,
+        "maxRetries": 2,
+        "timeout": 15000,
+        "retryCount": 0,
+        "status": "pending"
+      }
+    ],
+    "currentStepIndex": 0,
+    "executionContext": {},
+    "status": "created",
+    "overallProgress": 0
+  },
+  "createdAt": "2025-04-19T14:35:50.843Z",
+  "updatedAt": "2025-04-19T14:35:50.843Z"
+}

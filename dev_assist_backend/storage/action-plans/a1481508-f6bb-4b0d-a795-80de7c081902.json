@@ -1,0 +1,40 @@
+{
+  "id": "a1481508-f6bb-4b0d-a795-80de7c081902",
+  "userId": "user123",
+  "originalMessage": "tôi xong việc hôm nay rồi",
+  "processedInput": "Người dùng Phúc muốn thông báo rằng họ đã hoàn thành toàn bộ công việc được giao trong ngày hôm nay. Yêu cầu của Phúc có thể được phân tích như sau:\n\n1. **Ý định của người dùng và các hành động cần thiết:**\n   - Ý định chính của Phúc là cập nhật về tiến độ công việc hàng ngày cho nhóm hoặc quản lý dự án.\n   - Hành động cần thiết bao gồm việc cập nhật trạng thái của các công việc trong danh sách nhiệm vụ được giao cho Phúc sang trạng thái \"Hoàn thành\" hoặc \"Đã xong\", đặc biệt là trong bối cảnh dự án XDEMO2.\n   - Có thể cần thông báo cho nhóm hoặc lãnh đạo trực tiếp của Phúc về việc hoàn thành công việc này.\n\n2. **Các thông tin cần thiết:**\n   - **Project:** XDEMO2\n   - **Timeline:** Ngày hiện tại (hôm nay)\n   - **Status:** Các nhiệm vụ được đặt trạng thái \"Hoàn thành\" (\"Done\")\n   - **Người dùng:** Phúc\n\n3. **Ngữ cảnh bổ sung:**\n   - Hiện tại chưa có bất kỳ lịch sử hội thoại nào, do đó đây có thể là thông báo đầu tiên trong ngày của Phúc về công việc. Việc thông báo hoàn thành công việc này thường diễn ra vào cuối ngày làm việc.\n   - Trong trường hợp có hệ thống quản lý dự án hoặc bảng theo dõi tiến độ, Phúc có thể cần thực hiện thay đổi trên hệ thống đó để phản ánh trạng thái công việc. \n\nNgười dùng Phúc không chỉ muốn thông báo cá nhân mà còn cần thực hiện một số thao tác kỹ thuật để cho tất cả mọi người liên quan có thể cập nhật thông tin kịp thời và chính xác.",
+  "plan": {
+    "steps": [
+      {
+        "id": "step1",
+        "agentType": "JIRA",
+        "prompt": "Cập nhật trạng thái tất cả các công việc được giao cho Phúc trong dự án XDEMO2 sang trạng thái 'Hoàn thành' vào ngày hôm nay.",
+        "dependsOn": [],
+        "condition": null,
+        "maxRetries": 2,
+        "timeout": 15000,
+        "retryCount": 0,
+        "status": "pending"
+      },
+      {
+        "id": "step2",
+        "agentType": "SLACK",
+        "prompt": "Gửi thông báo tới nhóm và quản lý trực tiếp của Phúc rằng Phúc đã hoàn thành toàn bộ công việc được giao trong ngày hôm nay cho dự án XDEMO2.",
+        "dependsOn": [
+          "step1"
+        ],
+        "condition": null,
+        "maxRetries": 2,
+        "timeout": 15000,
+        "retryCount": 0,
+        "status": "pending"
+      }
+    ],
+    "currentStepIndex": 0,
+    "executionContext": {},
+    "status": "created",
+    "overallProgress": 0
+  },
+  "createdAt": "2025-04-19T14:22:06.071Z",
+  "updatedAt": "2025-04-19T14:22:06.071Z"
+}

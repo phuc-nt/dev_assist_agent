@@ -1,0 +1,53 @@
+{
+  "id": "9bb01135-71e8-4fec-b736-91eccb556ed4",
+  "userId": "user456",
+  "originalMessage": "Tôi đã hoàn thành tất cả công việc được giao ngày hôm nay",
+  "processedInput": "Người dùng Phúc đã hoàn thành tất cả các công việc được giao cho họ trong ngày hôm nay và đang tìm cách báo cáo điều này. Dưới đây là mô tả chi tiết về ý định và các thông tin liên quan:\n\n1. **Ý định của người dùng và các hành động cần thiết**:\n   - Người dùng mong muốn thông báo việc hoàn thành công việc cho team hoặc hệ thống quản lý công việc.\n   - Cần phải cập nhật trạng thái của các công việc (task) mà họ chịu trách nhiệm trong dự án thành \"Done\".\n   - Có thể cần gửi thông báo qua email hoặc hệ thống chat để xác nhận với các bên liên quan về việc hoàn tất công việc.\n\n2. **Các thông tin cần thiết**:\n   - **Người dùng**: Phúc\n   - **Dự án**: XDEMO2\n   - **Timeline**: Ngày hôm nay\n   - **Trạng thái công việc**: Chuyển từ \"In Progress\" hoặc trạng thái tương ứng sang \"Done\"\n\n3. **Bất kỳ ngữ cảnh bổ sung nào**:\n   - Yêu cầu này không có lịch sử hội thoại trước đó để cung cấp ngữ cảnh bổ sung về đặc thù công việc hay các chi tiết cụ thể khác.\n   - Có thể có một công cụ quản lý dự án hoặc bảng theo dõi công việc như Jira, Trello mà cần phải cập nhật.\n\nVới các thông tin này, Phúc cần thực hiện các bước cần thiết để xác nhận rằng công việc đã hoàn thành và thông báo điều này cho các bên liên quan trong dự án XDEMO2.",
+  "plan": {
+    "steps": [
+      {
+        "id": "step1",
+        "agentType": "JIRA",
+        "prompt": "Cập nhật tất cả các task của Phúc trong dự án XDEMO2, từ trạng thái 'In Progress' sang 'Done' cho ngày hôm nay.",
+        "dependsOn": [],
+        "condition": null,
+        "maxRetries": 2,
+        "timeout": 15000,
+        "retryCount": 0,
+        "status": "pending"
+      },
+      {
+        "id": "step2",
+        "agentType": "EMAIL",
+        "prompt": "Gửi email thông báo đến các bên liên quan: Công việc của Phúc trong dự án XDEMO2 đã hoàn thành. Các task đã được cập nhật trạng thái 'Done'.",
+        "dependsOn": [
+          "step1"
+        ],
+        "condition": null,
+        "maxRetries": 2,
+        "timeout": 15000,
+        "retryCount": 0,
+        "status": "pending"
+      },
+      {
+        "id": "step3",
+        "agentType": "SLACK",
+        "prompt": "Gửi tin nhắn trên Slack để thông báo với nhóm rằng tất cả các công việc của Phúc trong dự án XDEMO2 đã hoàn tất và đều được cập nhật trạng thái 'Done'.",
+        "dependsOn": [
+          "step1"
+        ],
+        "condition": null,
+        "maxRetries": 2,
+        "timeout": 15000,
+        "retryCount": 0,
+        "status": "pending"
+      }
+    ],
+    "currentStepIndex": 0,
+    "executionContext": {},
+    "status": "created",
+    "overallProgress": 0
+  },
+  "createdAt": "2025-04-19T15:26:19.552Z",
+  "updatedAt": "2025-04-19T15:26:19.552Z"
+}
