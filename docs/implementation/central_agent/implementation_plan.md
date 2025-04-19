@@ -89,100 +89,80 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 
 ## Chi tiết triển khai mới
 
-### Kế hoạch tiếp theo: Triển khai Action Planner
+### Action Planner đã triển khai hoàn tất
 
-Sau khi hoàn thành phân tích yêu cầu, bước tiếp theo là triển khai Action Planner để tạo kế hoạch hành động dựa trên yêu cầu đã phân tích. Action Planner sẽ:
+Action Planner đã được triển khai hoàn tất với các tính năng:
+- Tạo kế hoạch hành động từ phân tích yêu cầu sử dụng OpenAI API
+- Xác định agent cần gọi và tham số cho mỗi bước
+- Thiết lập logic phụ thuộc giữa các bước
+- Tích hợp với EnhancedLogger để ghi log chi tiết
+- Lưu trữ kế hoạch hành động vào hệ thống file
 
-1. Nhận kết quả từ InputProcessor
-2. Tạo kế hoạch hành động với các bước cụ thể
-3. Xác định agent cần gọi và tham số cần thiết cho mỗi bước
-4. Thiết lập logic phụ thuộc giữa các bước
+File structure triển khai:
+```
+src/central-agent/
+├── action-planner/
+│   ├── action-planner.service.ts
+│   └── action-planner.spec.ts
+├── models/
+│   └── action-plan.model.ts
+└── file-storage/
+    └── action-plan-storage.service.ts
+```
 
-**Tạo file `action-planner.service.ts`:**
+### Kế hoạch tiếp theo: Triển khai Agent Coordinator
+
+Sau khi hoàn thành Action Planner, bước tiếp theo là triển khai Agent Coordinator để thực thi kế hoạch hành động. Agent Coordinator sẽ:
+
+1. Nhận kế hoạch từ Action Planner
+2. Xác định các bước có thể thực hiện (không phụ thuộc hoặc đã thỏa mãn phụ thuộc)
+3. Gọi Sub-Agent tương ứng để thực hiện từng bước
+4. Cập nhật trạng thái của kế hoạch
+5. Xử lý lỗi và retry nếu cần
+
+**Cấu trúc file dự kiến:**
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { OpenaiService } from '../../openai/openai.service';
-import { ActionPlan, ActionStep, StepStatus, PlanStatus } from './models/action-plan.model';
+import { ActionPlan, ActionStep, StepStatus } from '../models/action-plan.model';
+import { AgentFactory } from '../agent-factory/agent-factory.service';
+import { EnhancedLogger } from '../../utils/logger';
 
 @Injectable()
-export class ActionPlanner {
-  constructor(private readonly openaiService: OpenaiService) {}
+export class AgentCoordinator {
+  private readonly logger = EnhancedLogger.getLogger(AgentCoordinator.name);
   
-  async createPlan(processedInput: string): Promise<ActionPlan> {
-    // Chuẩn bị prompt cho OpenAI
-    const systemPrompt = this.getSystemPrompt();
-    const userPrompt = this.getUserPrompt(processedInput);
+  constructor(private readonly agentFactory: AgentFactory) {}
+  
+  async executePlan(actionPlan: ActionPlan): Promise<ActionPlan> {
+    this.logger.log(`Bắt đầu thực thi kế hoạch với ${actionPlan.steps.length} bước`);
     
-    // Gọi OpenAI API
-    const response = await this.openaiService.chatWithFunctionCalling(systemPrompt, userPrompt);
+    // Cập nhật trạng thái kế hoạch
+    actionPlan.status = PlanStatus.IN_PROGRESS;
     
-    // Parse kết quả JSON từ response
-    try {
-      const planData = JSON.parse(response);
+    // Thực thi từng bước trong kế hoạch
+    while (this.hasStepsToExecute(actionPlan)) {
+      const nextSteps = this.getNextStepsToExecute(actionPlan);
       
-      // Tạo ActionPlan từ dữ liệu
-      const plan: ActionPlan = {
-        steps: planData.steps.map(s => ({
-          ...s,
-          status: StepStatus.PENDING,
-          retryCount: 0,
-        })),
-        currentStepIndex: 0,
-        executionContext: {},
-        status: PlanStatus.CREATED,
-        overallProgress: 0,
-      };
+      // Thực thi song song các bước có thể thực hiện
+      await Promise.all(
+        nextSteps.map(stepIndex => this.executeStep(actionPlan, stepIndex))
+      );
       
-      return plan;
-    } catch (error) {
-      throw new Error(`Không thể tạo kế hoạch: ${error.message}`);
+      // Cập nhật tiến độ
+      actionPlan.overallProgress = this.calculateProgress(actionPlan);
     }
+    
+    // Kiểm tra kết quả cuối cùng
+    if (this.allStepsSucceeded(actionPlan)) {
+      actionPlan.status = PlanStatus.COMPLETED;
+      this.logger.log('Kế hoạch đã hoàn thành thành công');
+    } else {
+      actionPlan.status = PlanStatus.FAILED;
+      this.logger.error('Kế hoạch thất bại do một số bước không thành công');
+    }
+    
+    return actionPlan;
   }
   
-  private getSystemPrompt(): string {
-    return `
-Bạn là một AI assistant được thiết kế để lập kế hoạch hành động từ mô tả yêu cầu.
-
-Với mỗi yêu cầu đã được xử lý, hãy:
-1. Xác định các bước cần thực hiện
-2. Xác định agent phù hợp cho mỗi bước (JIRA, SLACK, etc.)
-3. Tạo prompt ngôn ngữ tự nhiên chi tiết cho mỗi agent
-4. Thiết lập quan hệ phụ thuộc giữa các bước
-5. Thêm điều kiện cho các bước nếu cần
-
-Trả về kế hoạch dưới dạng JSON với cấu trúc:
-{
-  "steps": [
-    {
-      "id": "step1",
-      "agentType": "JIRA",
-      "prompt": "Chi tiết prompt cho JIRA agent...",
-      "dependsOn": [],
-      "condition": null,
-      "maxRetries": 2,
-      "timeout": 15000
-    },
-    ...
-  ]
-}
-    `;
-  }
-  
-  private getUserPrompt(processedInput: string): string {
-    return `
-Dựa trên yêu cầu đã được phân tích sau:
-
-${processedInput}
-
-Tạo kế hoạch thực hiện bao gồm các bước với thông tin:
-1. ID của bước
-2. Loại agent cần gọi (JIRA, SLACK, EMAIL, v.v.)
-3. Prompt ngôn ngữ tự nhiên chi tiết cho agent đó
-4. Các bước phụ thuộc (nếu có)
-5. Điều kiện thực hiện (nếu có)
-
-Các prompt cần chứa đủ thông tin để Sub-Agent có thể tự xác định hành động cụ thể.
-Trả về kế hoạch theo định dạng JSON.
-    `;
-  }
+  // Các phương thức hỗ trợ sẽ được triển khai
 } 
