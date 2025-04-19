@@ -11,6 +11,7 @@ import { ActionPlanStorageService } from './file-storage/action-plan-storage.ser
 import { AgentCoordinator } from './agent-coordinator/agent-coordinator.service';
 import { AgentFactory, MockJiraAgent, MockSlackAgent } from './agent-factory/agent-factory.service';
 import { ConfigModule } from '../config/config.module';
+import { ResultSynthesizerService } from './result-synthesizer/result-synthesizer.service';
 
 @Module({
   imports: [
@@ -28,7 +29,8 @@ import { ConfigModule } from '../config/config.module';
     AgentCoordinator,
     MockJiraAgent,
     MockSlackAgent,
-    AgentFactory
+    AgentFactory,
+    ResultSynthesizerService
   ],
   exports: [CentralAgentService],
 })

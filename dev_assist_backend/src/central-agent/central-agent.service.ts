@@ -6,6 +6,7 @@ import { ActionPlanStorageService } from './file-storage/action-plan-storage.ser
 import { AgentCoordinator } from './agent-coordinator/agent-coordinator.service';
 import { ActionPlan, PlanStatus, StepStatus } from './models/action-plan.model';
 import { EnhancedLogger } from '../utils/logger';
+import { ResultSynthesizerService } from './result-synthesizer/result-synthesizer.service';
 
 @Injectable()
 export class CentralAgentService {
@@ -17,6 +18,7 @@ export class CentralAgentService {
     private readonly actionPlanner: ActionPlanner,
     private readonly actionPlanStorage: ActionPlanStorageService,
     private readonly agentCoordinator: AgentCoordinator,
+    private readonly resultSynthesizer: ResultSynthesizerService,
   ) {}
   
   /**
@@ -61,12 +63,17 @@ export class CentralAgentService {
       // 6. Lưu kết quả thực thi vào storage
       await this.actionPlanStorage.updatePlan(executedPlan);
       
+      // 7. Sử dụng Result Synthesizer để tổng hợp kết quả
+      const result = await this.resultSynthesizer.synthesizeResult(
+        executedPlan,
+        processedInput
+      );
+      
       // Trả về kết quả
       return {
         processedInput,
         actionPlan: executedPlan,
-        // TODO: Thêm Result Synthesizer để tổng hợp kết quả
-        result: this.generateSimpleResult(executedPlan),
+        result
       };
       
     } catch (error) {
@@ -75,23 +82,6 @@ export class CentralAgentService {
     }
   }
   
-  /**
-   * Tạo kết quả đơn giản từ kế hoạch đã thực thi
-   * (sẽ được thay thế bằng Result Synthesizer trong tương lai)
-   */
-  private generateSimpleResult(plan: ActionPlan): string {
-    if (plan.status === PlanStatus.COMPLETED) {
-      const successSteps = plan.steps.filter(s => s.status === StepStatus.SUCCEEDED);
-      return `Đã thực hiện ${successSteps.length}/${plan.steps.length} bước thành công.`;
-    } else if (plan.status === PlanStatus.FAILED) {
-      const failedSteps = plan.steps.filter(s => s.status === StepStatus.FAILED);
-      const errors = failedSteps.map(s => `${s.id}: ${s.error?.message || 'Unknown error'}`);
-      return `Thực hiện không thành công. Lỗi: ${errors.join('; ')}`;
-    } else {
-      return `Trạng thái kế hoạch: ${plan.status}, tiến độ: ${plan.overallProgress}%`;
-    }
-  }
-
   /**
    * Lấy ActionPlan theo ID
    */

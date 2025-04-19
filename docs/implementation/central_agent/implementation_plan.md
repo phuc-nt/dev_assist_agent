@@ -38,10 +38,10 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 - [x] Viết unit test cho Agent Coordinator
 
 ### Phase 6: Result Synthesizer
-- [ ] Thiết kế interface và class cho Result Synthesizer
-- [ ] Tích hợp OpenAI API cho việc tổng hợp kết quả
-- [ ] Xây dựng prompt template cho Result Synthesizer
-- [ ] Viết unit test cho Result Synthesizer
+- [x] Thiết kế interface và class cho Result Synthesizer
+- [x] Tích hợp OpenAI API cho việc tổng hợp kết quả
+- [x] Xây dựng prompt template cho Result Synthesizer
+- [x] Viết unit test cho Result Synthesizer
 
 ### Phase 7: Mock Sub-Agents
 - [x] Tạo mock JIRA Agent
@@ -96,6 +96,14 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 - Đã thực hiện kiểm thử e2e với nhiều kịch bản sử dụng thực tế
 - Đã cải thiện hiệu suất và độ tin cậy của toàn bộ hệ thống
 
+### Phiên làm việc #6: Hoàn thành Phase 6
+- Đã triển khai ResultSynthesizerService để tổng hợp kết quả từ các bước thực thi
+- Đã tích hợp với OpenAI API thông qua phương thức chatWithFunctionCalling
+- Đã cập nhật CentralAgentService để sử dụng ResultSynthesizerService
+- Đã viết unit test cho ResultSynthesizerService
+- Phản hồi người dùng giờ đây đã chi tiết hơn và tự nhiên hơn
+- Với các thành phần đã triển khai, Central Agent đã có thể thực hiện đầy đủ vòng lặp: Input → Plan → Execute → Result
+
 ### Bài học kinh nghiệm
 1. **Cấu hình cổng kết nối**: Fix cứng cổng trong main.ts để tránh xung đột với các tiến trình khác
 2. **SQLite cho môi trường phát triển**: Cần đảm bảo gói `sqlite3` đã được cài đặt khi sử dụng TypeORM với SQLite
@@ -108,93 +116,107 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 
 ## Chi tiết triển khai mới
 
-### Agent Coordinator đã triển khai hoàn tất
+### Result Synthesizer đã hoàn thành
 
-Agent Coordinator đã được triển khai thành công với các tính năng:
+Result Synthesizer đã được triển khai thành công với các tính năng:
 
-- Thực thi kế hoạch hành động từ ActionPlanner
-- Điều phối các sub-agent dựa trên loại agent được chỉ định
-- Xác định thứ tự thực hiện dựa trên các phụ thuộc giữa các bước
-- Xử lý điều kiện để quyết định có thực hiện bước hay không
-- Hỗ trợ xử lý điều kiện bằng tiếng Việt thông qua phương thức processVietnameseCondition
-- Cập nhật trạng thái và tiến độ thực thi theo thời gian thực
-- Xử lý lỗi và retry cho các bước không thành công
-- Quản lý context thực thi để truyền thông tin giữa các bước
+- Tổng hợp kết quả từ các bước thực thi thành câu trả lời mạch lạc, dễ hiểu
+- Tích hợp với OpenAI API thông qua chatWithFunctionCalling
+- Xử lý nhiều trường hợp khác nhau: thành công, thất bại, thực thi một phần
+- Cung cấp thông tin chi tiết và có tính context về quá trình thực thi
+- Ngữ cảnh tự nhiên và thân thiện với người dùng
 
 File structure triển khai:
 ```
 src/central-agent/
-├── agent-coordinator/
-│   ├── agent-coordinator.service.ts
-│   └── agent-coordinator.spec.ts
-├── agent-factory/
-│   └── agent-factory.service.ts
-└── models/
-    └── action-plan.model.ts
+├── result-synthesizer/
+│   ├── result-synthesizer.service.ts
+│   └── result-synthesizer.spec.ts
 ```
 
-### Mock Sub-Agents đã triển khai
+### Hoàn thiện API Documentation
 
-Đã triển khai các mock sub-agent để mô phỏng tương tác với các hệ thống bên ngoài:
+Bước tiếp theo trong kế hoạch là hoàn thiện API Documentation. Công việc này sẽ bao gồm:
 
-- MockJiraAgent: Mô phỏng tìm kiếm, cập nhật và tạo issues trong Jira
-- MockSlackAgent: Mô phỏng gửi thông báo và tìm kiếm tin nhắn trong Slack
-- AgentFactory: Quản lý và cung cấp instance của các agent dựa trên loại
+1. Tạo Swagger document đầy đủ cho tất cả API endpoints
+2. Thêm mô tả chi tiết cho các DTO và entities
+3. Tạo hướng dẫn sử dụng API cho các nhà phát triển tiếp theo
+4. Mô tả các luồng làm việc chính và cách tích hợp
 
-MockSlackAgent đã được cải tiến để hỗ trợ hiển thị thông báo phong phú với Slack blocks, bao gồm:
-- Định dạng tiêu đề và đoạn văn
-- Hiển thị danh sách task với thông tin chi tiết
-- Hỗ trợ các phần tử tương tác như buttons
-- Sử dụng biểu tượng emoji để tăng tính trực quan
+### Cải thiện hiệu suất và reliability
 
-### Cải tiến luồng xử lý ActionPlan
+Ngoài ra, cần thực hiện các cải tiến về hiệu suất và độ tin cậy:
 
-Đã cải thiện luồng xử lý ActionPlan trong CentralAgentService:
+1. Tối ưu hóa prompt để giảm chi phí token
+2. Cải thiện cơ chế retry và xử lý lỗi
+3. Thêm logging chi tiết hơn để dễ debug
+4. Tạo các kịch bản test tự động
 
-- Lưu databaseId cùng với ActionPlan trước khi thực thi
-- Truyền databaseId trong suốt quá trình thực thi để đảm bảo cập nhật đúng kế hoạch
-- Sửa lỗi "Không có databaseId, không thể cập nhật ActionPlan"
-- Tăng cường xử lý lỗi và kiểm tra toàn vẹn dữ liệu
+## Kế hoạch tiếp theo: Sub-Agents thực
 
-### Kế hoạch tiếp theo: Triển khai Result Synthesizer
+Sau khi đã hoàn thiện Central Agent với mock Sub-Agents, bước tiếp theo sẽ là triển khai các Sub-Agents thực tế:
 
-Sau khi hoàn thành Agent Coordinator và Mock Sub-Agents, bước tiếp theo là triển khai Result Synthesizer để tổng hợp kết quả thực thi. Result Synthesizer sẽ:
+1. JIRA Agent: Tích hợp với JIRA API thực tế
+2. Slack Agent: Tích hợp với Slack API thực tế
+3. Thay thế các mock agents bằng các agents thực trong hệ thống
 
-1. Nhận kết quả từ các bước đã thực hiện
-2. Tạo câu trả lời tổng hợp cho người dùng dựa trên kết quả thực thi
-3. Tích hợp OpenAI API để tạo câu trả lời tự nhiên và mạch lạc
-4. Xử lý các trường hợp lỗi và thành công khác nhau
-
-**Cấu trúc file dự kiến:**
+**Dự kiến triển khai JIRA Agent:**
 ```typescript
-import { Injectable } from '@nestjs/common';
-import { ActionPlan, StepStatus } from '../models/action-plan.model';
-import { OpenaiService } from '../../openai/openai.service';
-import { EnhancedLogger } from '../../utils/logger';
-
 @Injectable()
-export class ResultSynthesizer {
-  private readonly logger = EnhancedLogger.getLogger(ResultSynthesizer.name);
+export class JiraAgent {
+  private readonly logger = EnhancedLogger.getLogger(JiraAgent.name);
+  private readonly jiraApiService: JiraApiService;
   
-  constructor(private readonly openaiService: OpenaiService) {}
-  
-  async synthesizeResult(
-    actionPlan: ActionPlan,
-    processedInput: string,
-  ): Promise<string> {
-    this.logger.log('Bắt đầu tổng hợp kết quả thực thi');
-    
-    // Tạo context cho yêu cầu
-    const context = this.prepareContext(actionPlan, processedInput);
-    
-    // Gọi OpenAI API để tổng hợp kết quả
-    const response = await this.openaiService.createCompletion({
-      systemPrompt: this.getSystemPrompt(),
-      userPrompt: this.getUserPrompt(context),
-    });
-    
-    return response.text;
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly openaiService: OpenaiService,
+  ) {
+    this.jiraApiService = new JiraApiService(
+      configService.get('JIRA_DOMAIN'),
+      configService.get('JIRA_EMAIL'),
+      configService.get('JIRA_API_TOKEN'),
+    );
   }
   
-  // Các phương thức hỗ trợ sẽ được triển khai
+  async execute(prompt: string): Promise<AgentResponse> {
+    try {
+      this.logger.log(`JIRA Agent executing: ${prompt}`);
+      const startTime = Date.now();
+      
+      // Sử dụng OpenAI để phân tích prompt và xác định hành động JIRA cần thực hiện
+      const analysis = await this.openaiService.chatWithFunctionCalling(
+        this.getSystemPrompt(),
+        prompt
+      );
+      
+      // Thực hiện hành động JIRA thông qua JiraApiService
+      // ... code thực thi các hành động JIRA ...
+      
+      const executionTime = Date.now() - startTime;
+      
+      return {
+        success: true,
+        data: {
+          // Kết quả từ JIRA API
+        },
+        metadata: {
+          executionTime,
+          tokenUsage: 150 // estimation
+        }
+      };
+    } catch (error) {
+      this.logger.error(`Error executing JIRA Agent: ${error.message}`);
+      return {
+        success: false,
+        error: {
+          message: error.message
+        },
+        metadata: {}
+      };
+    }
+  }
+  
+  private getSystemPrompt(): string {
+    // System prompt cho JIRA agent
+  }
 } 
