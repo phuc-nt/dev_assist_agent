@@ -6,24 +6,24 @@ import { ConfigModule } from '@nestjs/config';
 import { ChatModule } from './chat/chat.module';
 import { JiraModule } from './jira/jira.module';
 import { SlackModule } from './slack/slack.module';
+import { CentralAgentModule } from './central-agent/central-agent.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Load .env toàn cục
+    // Sử dụng TypeORM với SQLite trong bộ nhớ thay vì MySQL
     TypeOrmModule.forRoot({
-      type: 'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'root',
-      password: '',
-      database: 'dev-assist',
+      type: 'sqlite',
+      database: ':memory:',
       entities: [User],
-      synchronize: true, // Chỉ dùng trong môi trường dev, không nên bật ở production
+      synchronize: true,
+      logging: false,
     }),
     UserModule,
     ChatModule,
     JiraModule,
     SlackModule,
+    CentralAgentModule,
   ],
 })
 export class AppModule {}
