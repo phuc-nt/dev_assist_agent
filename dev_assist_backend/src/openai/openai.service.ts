@@ -6,6 +6,8 @@ import { OpenAI } from 'openai';
 import { FetchDataDto, FetchDataResponseDto } from './dto/fetch-data.dto';
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { DEFAULT_LLM_CONFIG, LLMConfig, PromptConfig, PROMPT_CONFIGS } from '../config/llm.config';
+import { CostMonitoringService, TokenUsage } from '../cost-monitoring/cost-monitoring.service';
+import { countTokens } from '../utils/token-counter';
 
 // Định nghĩa interface cho adapter
 export interface AuthAdapter {
@@ -58,6 +60,7 @@ export class OpenaiService {
   constructor(
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
+    private readonly costMonitoringService?: CostMonitoringService, // Optional để tránh circular dependency
   ) {
     this.openai = new OpenAI({
       apiKey: this.configService.get<string>('OPENAI_API_KEY'),
@@ -113,15 +116,69 @@ export class OpenaiService {
     return this.llmConfig.model;
   }
 
-  async chat(prompt: string) {
+  /**
+   * Theo dõi việc sử dụng token
+   */
+  private async trackTokenUsage(data: {
+    operation: string;
+    component?: string;
+    promptTokens: number;
+    completionTokens: number;
+    executionTime?: number;
+    metadata?: Record<string, any>;
+  }): Promise<void> {
+    // Nếu không có cost monitoring service, bỏ qua
+    if (!this.costMonitoringService) {
+      return;
+    }
+    
     try {
+      const tokenUsage: TokenUsage = {
+        promptTokens: data.promptTokens,
+        completionTokens: data.completionTokens,
+        totalTokens: data.promptTokens + data.completionTokens
+      };
+      
+      await this.costMonitoringService.trackTokenUsage({
+        model: this.llmConfig.model,
+        component: data.component || 'unknown',
+        operation: data.operation,
+        tokenUsage,
+        metadata: {
+          ...(data.metadata || {}),
+          executionTime: data.executionTime
+        }
+      });
+    } catch (error) {
+      this.logger.error(`Error tracking token usage: ${error.message}`);
+    }
+  }
+
+  async chat(prompt: string, component: string = 'unknown') {
+    try {
+      const startTime = Date.now();
       this.logger.log(`Gọi OpenAI chat với model [${this.llmConfig.model}], temperature [${this.llmConfig.temperature}]`);
+      
+      // Ước tính số token dùng cho prompt
+      const promptTokens = countTokens(prompt, this.llmConfig.model);
       
       const response = await this.openai.chat.completions.create({
         model: this.llmConfig.model,
         messages: [{ role: 'user', content: prompt }],
         temperature: this.llmConfig.temperature,
         max_tokens: this.llmConfig.maxTokens,
+      });
+
+      const executionTime = Date.now() - startTime;
+      
+      // Theo dõi việc sử dụng token
+      await this.trackTokenUsage({
+        operation: 'chat',
+        component,
+        promptTokens: response.usage?.prompt_tokens || promptTokens,
+        completionTokens: response.usage?.completion_tokens || 0,
+        executionTime,
+        metadata: { prompt }
       });
 
       return response.choices[0]?.message?.content || '';
@@ -135,18 +192,39 @@ export class OpenaiService {
   /**
    * Thực hiện chat với system prompt và user prompt
    */
-  async chatWithSystem(systemPrompt: string, userPrompt: string) {
+  async chatWithSystem(systemPrompt: string, userPrompt: string, component: string = 'unknown') {
     try {
+      const startTime = Date.now();
       this.logger.log(`Gọi OpenAI chatWithSystem với model [${this.llmConfig.model}], temperature [${this.llmConfig.temperature}]`);
+      
+      // Ước tính số token dùng cho prompt
+      const messages: ChatCompletionMessageParam[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ];
+      const promptTokens = countTokens(systemPrompt, this.llmConfig.model) + 
+                          countTokens(userPrompt, this.llmConfig.model) + 10; // 10 token for message format
       
       const response = await this.openai.chat.completions.create({
         model: this.llmConfig.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
+        messages,
         temperature: this.llmConfig.temperature,
         max_tokens: this.llmConfig.maxTokens,
+      });
+
+      const executionTime = Date.now() - startTime;
+      
+      // Theo dõi việc sử dụng token
+      await this.trackTokenUsage({
+        operation: 'chatWithSystem',
+        component,
+        promptTokens: response.usage?.prompt_tokens || promptTokens,
+        completionTokens: response.usage?.completion_tokens || 0,
+        executionTime,
+        metadata: { 
+          systemPrompt,
+          userPrompt 
+        }
       });
 
       return response.choices[0]?.message?.content || '';
@@ -157,70 +235,41 @@ export class OpenaiService {
     }
   }
 
-  async chatWithFunctionCalling(systemPrompt: string, userPrompt: string) {
+  async chatWithFunctionCalling(systemPrompt: string, userPrompt: string, component: string = 'unknown') {
     try {
+      const startTime = Date.now();
       this.logger.log(`Gọi OpenAI chatWithFunctionCalling với model [${this.llmConfig.model}], temperature [${this.llmConfig.temperature}]`);
       
-      const functions = [
-        {
-          name: 'fetchData',
-          description: 'Make a request to a URL',
-          parameters: {
-            type: 'object',
-            properties: {
-              url: {
-                type: 'string',
-                description: 'Full URL to get data',
-              },
-              method: {
-                type: 'string',
-                enum: ['GET', 'POST', 'PUT', 'DELETE'],
-                description: 'HTTP method, default is GET',
-                default: 'GET',
-              },
-              headers: {
-                type: 'object',
-                description: 'Additional headers for the request',
-              },
-              body: {
-                type: 'object',
-                description: 'Body for the request (only for POST, PUT)',
-              },
-              authType: {
-                type: 'string',
-                enum: ['none', 'jira', 'slack'],
-                description: 'Type of authentication to use',
-                default: 'none',
-              },
-            },
-            required: ['url'],
-          },
-        },
+      // Ước tính số token dùng cho prompt
+      const messages: ChatCompletionMessageParam[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
       ];
-
+      const promptTokens = countTokens(systemPrompt, this.llmConfig.model) + 
+                          countTokens(userPrompt, this.llmConfig.model) + 
+                          countTokens(JSON.stringify(this.getFetchDataFunction()), this.llmConfig.model);
+      
       const response = await this.openai.chat.completions.create({
         model: this.llmConfig.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
+        messages,
         temperature: this.llmConfig.temperature,
         max_tokens: this.llmConfig.maxTokens,
         tools: [
           {
             type: 'function',
-            function: functions[0],
+            function: this.getFetchDataFunction(),
           },
         ],
         tool_choice: 'auto',
       });
 
       const responseMessage = response.choices[0].message;
+      let completionTokens = response.usage?.completion_tokens || 0;
 
       // Check if there are tool_calls
       if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
         // Prepare the messages array for the next call
-        const messages: ChatCompletionMessageParam[] = [
+        const messagesWithToolResults: ChatCompletionMessageParam[] = [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
           responseMessage,
@@ -242,7 +291,7 @@ export class OpenaiService {
           }
 
           // Add the result to the messages array
-          messages.push({
+          messagesWithToolResults.push({
             role: 'tool',
             tool_call_id: toolCall.id,
             content: JSON.stringify(result),
@@ -250,16 +299,58 @@ export class OpenaiService {
         }
 
         this.logger.log(`Gọi lại OpenAI với kết quả function calls, model [${this.llmConfig.model}]`);
+        
+        // Ước tính số token cho tool results
+        const toolResultsContent = messagesWithToolResults
+          .filter(m => m.role === 'tool')
+          .map(m => m.content)
+          .join('');
+        const toolResultsTokens = countTokens(toolResultsContent, this.llmConfig.model);
+        
         // Call OpenAI again with all results from the functions
         const secondResponse = await this.openai.chat.completions.create({
           model: this.llmConfig.model,
-          messages,
+          messages: messagesWithToolResults,
           temperature: this.llmConfig.temperature,
           max_tokens: this.llmConfig.maxTokens,
         });
 
+        // Cập nhật số token
+        completionTokens += secondResponse.usage?.completion_tokens || 0;
+        
+        const executionTime = Date.now() - startTime;
+      
+        // Theo dõi việc sử dụng token
+        await this.trackTokenUsage({
+          operation: 'chatWithFunctionCalling',
+          component,
+          promptTokens: response.usage?.prompt_tokens + (secondResponse.usage?.prompt_tokens - response.usage?.completion_tokens) || promptTokens + toolResultsTokens,
+          completionTokens,
+          executionTime,
+          metadata: { 
+            systemPrompt,
+            userPrompt,
+            functionCalls: responseMessage.tool_calls?.length || 0
+          }
+        });
+
         return secondResponse.choices[0].message.content;
       }
+
+      const executionTime = Date.now() - startTime;
+      
+      // Theo dõi việc sử dụng token (không có function calls)
+      await this.trackTokenUsage({
+        operation: 'chatWithFunctionCalling',
+        component,
+        promptTokens: response.usage?.prompt_tokens || promptTokens,
+        completionTokens,
+        executionTime,
+        metadata: { 
+          systemPrompt,
+          userPrompt
+        }
+      });
 
       return responseMessage.content;
     } catch (error) {
@@ -267,6 +358,46 @@ export class OpenaiService {
       this.logger.error(`Error with function calling: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Định nghĩa function fetchData cho function calling
+   */
+  private getFetchDataFunction() {
+    return {
+      name: 'fetchData',
+      description: 'Make a request to a URL',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: 'Full URL to get data',
+          },
+          method: {
+            type: 'string',
+            enum: ['GET', 'POST', 'PUT', 'DELETE'],
+            description: 'HTTP method, default is GET',
+            default: 'GET',
+          },
+          headers: {
+            type: 'object',
+            description: 'Additional headers for the request',
+          },
+          body: {
+            type: 'object',
+            description: 'Body for the request (only for POST, PUT)',
+          },
+          authType: {
+            type: 'string',
+            enum: ['none', 'jira', 'slack'],
+            description: 'Type of authentication to use',
+            default: 'none',
+          },
+        },
+        required: ['url'],
+      },
+    };
   }
 
   async fetchDataWithAuth(

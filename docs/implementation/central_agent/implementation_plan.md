@@ -61,11 +61,11 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 - [x] Cải thiện hệ thống logging để theo dõi việc sử dụng LLM
 
 ### Phase 10: Theo dõi chi phí (Cost Monitoring)
-- [ ] Tạo module theo dõi chi phí sử dụng LLM
-- [ ] Thiết kế cấu trúc dữ liệu cho việc lưu trữ thông tin sử dụng token
-- [ ] Cập nhật `OpenaiService` để theo dõi và tính toán chi phí
-- [ ] Tạo API endpoints để xem thống kê chi phí
-- [ ] Triển khai cơ chế cảnh báo khi chi phí vượt ngưỡng
+- [x] Tạo module theo dõi chi phí sử dụng LLM
+- [x] Thiết kế cấu trúc dữ liệu cho việc lưu trữ thông tin sử dụng token
+- [x] Cập nhật `OpenaiService` để theo dõi và tính toán chi phí
+- [x] Tạo API endpoints để xem thống kê chi phí
+- [x] Triển khai cơ chế cảnh báo khi chi phí vượt ngưỡng
 
 ## Báo cáo tiến độ
 
@@ -131,6 +131,30 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 - Đã cải thiện hệ thống logging để theo dõi việc sử dụng LLM trong các thành phần
 - Đã viết thêm chi tiết hướng dẫn sử dụng cấu hình tập trung trong code
 
+### Phiên làm việc #8: Hoàn thành Phase 10 - Cost Monitoring
+- Đã triển khai module theo dõi chi phí sử dụng LLM
+- Đã tạo entity LLMUsageRecord để lưu trữ thông tin sử dụng token
+- Đã cập nhật OpenaiService để theo dõi việc sử dụng token và tính toán chi phí
+- Đã tạo API endpoints để xem thống kê chi phí theo ngày, tháng, component và model
+- Đã triển khai cơ chế cảnh báo tự động khi chi phí vượt ngưỡng
+- Đã sử dụng tiktoken để tính toán chính xác số lượng token
+- Đã cải thiện việc lưu trữ dữ liệu bằng cách chuyển từ in-memory database sang file database
+
+### Phiên làm việc #9: Cập nhật giá model và sửa lỗi tính toán token
+- Đã cập nhật giá cho các model mới của OpenAI trong `model-cost.config.ts`:
+  - Đã thêm `gpt-4o`: $0.0025 / $0.01 per 1K tokens
+  - Đã thêm `gpt-4o-mini`: $0.00015 / $0.0006 per 1K tokens
+  - Đã thêm `gpt-4.1`: $0.002 / $0.008 per 1K tokens
+  - Đã thêm `gpt-4.1-mini`: $0.0004 / $0.0016 per 1K tokens
+  - Đã thêm `gpt-4.1-nano`: $0.0001 / $0.0004 per 1K tokens
+  - Đã thêm `o3`: $0.01 / $0.04 per 1K tokens
+  - Đã thêm `o4-mini`: $0.0011 / $0.0044 per 1K tokens
+- Đã sửa lỗi "Invalid model" trong thư viện tiktoken khi tính toán token
+- Đã triển khai cơ chế ánh xạ model trong `token-counter.ts` để xử lý model mới chưa được tiktoken hỗ trợ
+- Đã giải quyết vấn đề tính toán token cho các model mới (như gpt-4.1-mini, gpt-4o, v.v.)
+- Đã cải thiện hiệu suất và độ tin cậy của hệ thống khi sử dụng các model mới
+- Đã kiểm thử tính toán chi phí với tất cả các model đã cấu hình
+
 ## Bài học kinh nghiệm
 1. **Cấu hình cổng kết nối**: Fix cứng cổng trong main.ts để tránh xung đột với các tiến trình khác
 2. **SQLite cho môi trường phát triển**: Cần đảm bảo gói `sqlite3` đã được cài đặt khi sử dụng TypeORM với SQLite
@@ -140,6 +164,8 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 6. **Xử lý lỗi kết nối cơ sở dữ liệu**: Kiểm tra SQLite đã được cài đặt đúng cách và có quyền truy cập vào thư mục lưu trữ cơ sở dữ liệu
 7. **Quản lý databaseId**: Đảm bảo truyền databaseId khi cập nhật kết quả thực thi để tránh tạo nhiều kế hoạch mới
 8. **Xử lý điều kiện tiếng Việt**: Cần xử lý đặc biệt đối với các điều kiện bằng tiếng Việt trong phương thức evaluateCondition
+9. **Ánh xạ model cho thư viện tiktoken**: Khi sử dụng các model mới, cần ánh xạ sang các model mà thư viện tiktoken hỗ trợ
+10. **Cập nhật bảng giá thường xuyên**: Đảm bảo bảng giá được cập nhật theo giá mới nhất từ OpenAI
 
 ## Chi tiết triển khai đã hoàn thành
 
@@ -177,6 +203,36 @@ src/
 ├── openai/
 │   ├── openai.service.ts
 │   └── openai.controller.ts
+```
+
+### Cơ chế ánh xạ model cho tính toán token
+Đã triển khai cơ chế ánh xạ model để xử lý các model mới chưa được tiktoken hỗ trợ:
+
+- Sử dụng bảng ánh xạ để chuyển đổi từ model mới sang model được hỗ trợ
+- Xử lý lỗi "Invalid model" khi thư viện tiktoken không nhận diện được model
+- Đảm bảo tính toán token chính xác cho tất cả model sử dụng trong hệ thống
+
+File structure triển khai:
+```
+src/utils/
+└── token-counter.ts
+```
+
+Ví dụ implementation:
+```typescript
+function mapToSupportedModel(model: string): string {
+  const modelMap: Record<string, string> = {
+    'gpt-4.1-mini': 'gpt-4',
+    'gpt-4.1': 'gpt-4',
+    'gpt-4.1-nano': 'gpt-4',
+    'gpt-4o': 'gpt-4',
+    'gpt-4o-mini': 'gpt-4',
+    'o3': 'gpt-3.5-turbo',
+    'o4-mini': 'gpt-4'
+  };
+
+  return modelMap[model] || model;
+}
 ```
 
 ## Kế hoạch tiếp theo
