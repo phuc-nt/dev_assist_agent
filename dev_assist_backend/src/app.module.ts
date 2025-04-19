@@ -7,6 +7,7 @@ import { ChatModule } from './chat/chat.module';
 import { JiraModule } from './jira/jira.module';
 import { SlackModule } from './slack/slack.module';
 import { CentralAgentModule } from './central-agent/central-agent.module';
+import { ActionPlanEntity } from './central-agent/entities/action-plan.entity';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { CentralAgentModule } from './central-agent/central-agent.module';
     TypeOrmModule.forRoot({
       type: 'sqlite',
       database: ':memory:',
-      entities: [User],
+      entities: [User, ActionPlanEntity],
       synchronize: true,
       logging: false,
     }),

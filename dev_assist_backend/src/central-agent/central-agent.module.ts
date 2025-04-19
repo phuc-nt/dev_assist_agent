@@ -8,10 +8,14 @@ import { OpenaiModule } from '../openai/openai.module';
 import { ActionPlanner } from './action-planner/action-planner.service';
 import { ActionPlanEntity } from './entities/action-plan.entity';
 import { ActionPlanStorageService } from './file-storage/action-plan-storage.service';
+import { AgentCoordinator } from './agent-coordinator/agent-coordinator.service';
+import { AgentFactory, MockJiraAgent, MockSlackAgent } from './agent-factory/agent-factory.service';
+import { ConfigModule } from '../config/config.module';
 
 @Module({
   imports: [
     OpenaiModule,
+    ConfigModule,
     TypeOrmModule.forFeature([ActionPlanEntity]),
   ],
   controllers: [CentralAgentController],
@@ -21,6 +25,10 @@ import { ActionPlanStorageService } from './file-storage/action-plan-storage.ser
     ProjectConfigReader,
     ActionPlanner,
     ActionPlanStorageService,
+    AgentCoordinator,
+    MockJiraAgent,
+    MockSlackAgent,
+    AgentFactory
   ],
   exports: [CentralAgentService],
 })

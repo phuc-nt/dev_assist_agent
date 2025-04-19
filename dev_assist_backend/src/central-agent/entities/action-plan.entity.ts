@@ -6,17 +6,20 @@ export class ActionPlanEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ nullable: false })
+  @Column({ nullable: true })
   userId: string;
 
-  @Column({ nullable: false })
-  originalMessage: string;
+  @Column({ nullable: true, name: 'original_message' })
+  userRequest: string;
 
-  @Column({ type: 'text', nullable: false })
+  @Column({ type: 'text', nullable: true })
   processedInput: string;
 
-  @Column({ type: 'json', nullable: false })
+  @Column({ type: 'json', nullable: true })
   plan: ActionPlan;
+
+  @Column({ type: 'integer', default: 0 })
+  stepsCount: number;
 
   @Column({
     type: 'varchar',
@@ -25,12 +28,15 @@ export class ActionPlanEntity {
   })
   status: string;
 
-  @Column({ default: 0 })
-  overallProgress: number;
+  @Column({ default: 0, name: 'overall_progress' })
+  progress: number;
 
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
+  
+  @Column({ nullable: true })
+  completedAt: Date;
 } 

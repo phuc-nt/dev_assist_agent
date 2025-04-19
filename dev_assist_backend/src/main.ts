@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 // Cấu hình logger với màu sắc
 const logger = new Logger('Application');
@@ -50,8 +51,23 @@ async function bootstrap() {
     bufferLogs: false,
   });
   
-  // Lấy cổng từ biến môi trường hoặc sử dụng 3005 
-  const port = process.env.PORT || 3005;
+  app.enableCors(); // Enable CORS for all routes
+  
+  // Serve swagger documentation at /api
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('DevAssist API')
+    .setDescription('DevAssist Backend API documentation')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api', app, document);
+
+  // Graceful shutdown
+  app.enableShutdownHooks();
+
+  // Lấy cổng từ biến môi trường hoặc sử dụng 3001 
+  const port = process.env.PORT || 3001;
   await app.listen(port);
   
   const serverUrl = `http://localhost:${port}`;

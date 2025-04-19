@@ -22,11 +22,11 @@ export class ActionPlanRepository {
   ): Promise<ActionPlanEntity> {
     const entity = new ActionPlanEntity();
     entity.userId = userId;
-    entity.originalMessage = originalMessage;
+    entity.userRequest = originalMessage;
     entity.processedInput = processedInput;
     entity.plan = actionPlan;
     entity.status = actionPlan.status;
-    entity.overallProgress = actionPlan.overallProgress;
+    entity.progress = actionPlan.overallProgress;
 
     return this.actionPlanRepo.save(entity);
   }
@@ -61,7 +61,7 @@ export class ActionPlanRepository {
   ): Promise<void> {
     await this.actionPlanRepo.update(
       { id },
-      { status, overallProgress, plan: actionPlan },
+      { status, progress: overallProgress, plan: actionPlan },
     );
   }
 } 

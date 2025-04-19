@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InputProcessor } from './input-processor/input-processor.service';
 import { ProjectConfigReader } from './project-config/project-config-reader.service';
 import { ActionPlanner } from './action-planner/action-planner.service';
-import { ActionPlan } from './models/action-plan.model';
 import { ActionPlanStorageService } from './file-storage/action-plan-storage.service';
+import { AgentCoordinator } from './agent-coordinator/agent-coordinator.service';
+import { ActionPlan, PlanStatus, StepStatus } from './models/action-plan.model';
 import { EnhancedLogger } from '../utils/logger';
 
 @Injectable()
@@ -15,79 +16,80 @@ export class CentralAgentService {
     private readonly projectConfigReader: ProjectConfigReader,
     private readonly actionPlanner: ActionPlanner,
     private readonly actionPlanStorage: ActionPlanStorageService,
+    private readonly agentCoordinator: AgentCoordinator,
   ) {}
-
-  async processRequest(message: string, userId: string) {
-    this.logger.log(`Nhận yêu cầu mới từ userId: ${userId}, message: "${message}"`);
-    
-    // Đọc cấu hình dự án
-    this.logger.log('Đọc cấu hình dự án...');
-    const projectConfig = await this.projectConfigReader.getProjectConfig();
-    this.logger.debug(`Đọc cấu hình dự án thành công: ${JSON.stringify(projectConfig, null, 2)}`);
-    
-    // Tìm user name
-    const userName = this.findUserNameById(userId, projectConfig);
-    this.logger.log(`Xác định người dùng: ${userName}`);
-    
-    // Tạo context cho Input Processor
-    const context = {
-      user: {
-        id: userId,
-        name: userName,
-      },
-      project: {
-        key: projectConfig.jira.projectKey,
-      },
-      conversationHistory: [], // TODO: Implement conversation history
-    };
-    this.logger.debug(`Context cho Input Processor: ${JSON.stringify(context, null, 2)}`);
-    
-    // Phân tích yêu cầu
-    this.logger.log('Gửi yêu cầu đến Input Processor...');
-    const startTimeInput = Date.now();
-    const processedInput = await this.inputProcessor.processInput(message, context);
-    const inputProcessingTime = Date.now() - startTimeInput;
-    this.logger.log(`Phân tích yêu cầu hoàn thành trong ${inputProcessingTime}ms`);
-    this.logger.debug(`Kết quả phân tích yêu cầu: ${processedInput}`);
-    
-    // Lập kế hoạch hành động
-    this.logger.log('Gửi yêu cầu đến Action Planner...');
-    const startTimePlanning = Date.now();
-    const actionPlan = await this.actionPlanner.createPlan(processedInput);
-    const planningTime = Date.now() - startTimePlanning;
-    this.logger.log(`Lập kế hoạch hành động hoàn thành trong ${planningTime}ms với ${actionPlan.steps.length} bước`);
-    
-    // Log thông tin bước trong kế hoạch
-    actionPlan.steps.forEach((step, index) => {
-      this.logger.debug(`Bước ${index + 1}: ${step.id}, Agent: ${step.agentType}, Phụ thuộc: ${step.dependsOn.join(', ') || 'Không'}`);
-      this.logger.debug(`  Prompt: ${step.prompt}`);
-    });
-    
-    // Lưu ActionPlan vào file
-    this.logger.log('Lưu trữ ActionPlan vào file...');
-    let savedPlan;
+  
+  /**
+   * Xử lý yêu cầu từ người dùng
+   */
+  async processRequest(
+    input: string,
+    userId: string,
+    conversationHistory: Array<{ role: string; content: string }> = [],
+  ): Promise<any> {
     try {
-      savedPlan = await this.actionPlanStorage.saveActionPlan(
-        userId,
-        message,
-        processedInput,
-        actionPlan,
+      this.logger.log(`Đang xử lý yêu cầu: ${input}`);
+      
+      // 1. Đọc thông tin dự án
+      const projectContext = await this.projectConfigReader.getProjectContext(userId);
+      
+      // 2. Sử dụng Input Processor để phân tích yêu cầu
+      const processedInput = await this.inputProcessor.processInput(
+        input,
+        {
+          user: { id: userId, name: projectContext?.user?.name || userId },
+          project: projectContext?.project,
+          conversationHistory,
+        },
       );
-      this.logger.log(`ActionPlan đã được lưu với ID: ${savedPlan.id}`);
+      
+      // 3. Sử dụng Action Planner để lập kế hoạch hành động
+      const actionPlan = await this.actionPlanner.createPlan(processedInput);
+      
+      // 4. Lưu kế hoạch vào storage
+      const savedPlan = await this.actionPlanStorage.savePlan(actionPlan);
+      
+      // Cập nhật databaseId cho actionPlan để đảm bảo cập nhật đúng plan
+      const planWithId = { 
+        ...actionPlan, 
+        databaseId: savedPlan.id
+      };
+      
+      // 5. Thực thi kế hoạch bằng Agent Coordinator
+      const executedPlan = await this.agentCoordinator.executePlan(planWithId);
+      
+      // 6. Lưu kết quả thực thi vào storage
+      await this.actionPlanStorage.updatePlan(executedPlan);
+      
+      // Trả về kết quả
+      return {
+        processedInput,
+        actionPlan: executedPlan,
+        // TODO: Thêm Result Synthesizer để tổng hợp kết quả
+        result: this.generateSimpleResult(executedPlan),
+      };
+      
     } catch (error) {
-      this.logger.error(`Lỗi khi lưu ActionPlan: ${error.message}`);
-      // Tiếp tục xử lý ngay cả khi không lưu được, nhưng ghi lại lỗi
+      this.logger.error(`Lỗi khi xử lý yêu cầu: ${error.message}`);
+      throw error;
     }
-    
-    // Trong phase hiện tại, chỉ trả về kết quả phân tích và kế hoạch
-    this.logger.log('Hoàn thành xử lý yêu cầu');
-    return {
-      userId,
-      originalMessage: message,
-      processedInput,
-      actionPlan,
-      planId: savedPlan?.id, // Trả về ID của plan đã lưu nếu có
-    };
+  }
+  
+  /**
+   * Tạo kết quả đơn giản từ kế hoạch đã thực thi
+   * (sẽ được thay thế bằng Result Synthesizer trong tương lai)
+   */
+  private generateSimpleResult(plan: ActionPlan): string {
+    if (plan.status === PlanStatus.COMPLETED) {
+      const successSteps = plan.steps.filter(s => s.status === StepStatus.SUCCEEDED);
+      return `Đã thực hiện ${successSteps.length}/${plan.steps.length} bước thành công.`;
+    } else if (plan.status === PlanStatus.FAILED) {
+      const failedSteps = plan.steps.filter(s => s.status === StepStatus.FAILED);
+      const errors = failedSteps.map(s => `${s.id}: ${s.error?.message || 'Unknown error'}`);
+      return `Thực hiện không thành công. Lỗi: ${errors.join('; ')}`;
+    } else {
+      return `Trạng thái kế hoạch: ${plan.status}, tiến độ: ${plan.overallProgress}%`;
+    }
   }
 
   /**
