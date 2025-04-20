@@ -1,13 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { ActionPlan, ActionStep, StepStatus, PlanStatus, StepResult } from '../models/action-plan.model';
+import { ActionPlan, ActionStep, StepStatus, PlanStatus, StepResult, AgentType } from '../models/action-plan.model';
 import { EnhancedLogger } from '../../utils/logger';
 import { AgentFactory } from '../agent-factory/agent-factory.service';
+import { ActionPlanner } from '../action-planner/action-planner.service';
 
 @Injectable()
 export class AgentCoordinator {
   private readonly logger = EnhancedLogger.getLogger(AgentCoordinator.name);
   
-  constructor(private readonly agentFactory: AgentFactory) {}
+  constructor(
+    private readonly agentFactory: AgentFactory,
+    private readonly actionPlanner: ActionPlanner
+  ) {}
   
   /**
    * Thực thi kế hoạch hành động
@@ -32,10 +36,25 @@ export class AgentCoordinator {
         
         this.logger.debug(`Thực hiện ${nextSteps.length} bước tiếp theo: ${nextSteps.map(i => actionPlan.steps[i].id).join(', ')}`);
         
-        // Thực thi song song các bước có thể thực hiện
-        await Promise.all(
-          nextSteps.map(stepIndex => this.executeStep(actionPlan, stepIndex))
-        );
+        // Thực thi từng bước một để có thể điều chỉnh kế hoạch sau mỗi bước
+        for (const stepIndex of nextSteps) {
+          await this.executeStep(actionPlan, stepIndex);
+          
+          // Kiểm tra xem có cần điều chỉnh kế hoạch không
+          const stepResult = actionPlan.steps[stepIndex].result;
+          const stepStatus = actionPlan.steps[stepIndex].status;
+          
+          if (stepStatus === StepStatus.FAILED) {
+            const evaluation = actionPlan.steps[stepIndex].evaluation;
+            if (evaluation && evaluation.needsAdjustment) {
+              const adjustedPlan = await this.considerPlanAdjustment(actionPlan, stepIndex);
+              if (adjustedPlan) {
+                this.logger.log(`Kế hoạch đã được điều chỉnh sau bước ${actionPlan.steps[stepIndex].id}`);
+                actionPlan = adjustedPlan;
+              }
+            }
+          }
+        }
         
         // Cập nhật tiến độ
         actionPlan.overallProgress = this.calculateProgress(actionPlan);
@@ -61,6 +80,129 @@ export class AgentCoordinator {
       actionPlan.endTime = new Date();
       return actionPlan;
     }
+  }
+  
+  /**
+   * Xem xét điều chỉnh kế hoạch dựa trên kết quả thực thi
+   */
+  private async considerPlanAdjustment(plan: ActionPlan, failedStepIndex: number): Promise<ActionPlan | null> {
+    const failedStep = plan.steps[failedStepIndex];
+    
+    // Kiểm tra nếu bước thất bại cần được xử lý đặc biệt
+    if (!this.needsPlanAdjustment(failedStep)) {
+      return null;
+    }
+    
+    this.logger.log(`Xem xét điều chỉnh kế hoạch sau khi bước ${failedStep.id} thất bại`);
+    
+    try {
+      // Xây dựng thông tin để gửi cho ActionPlanner
+      const adjustmentInfo = {
+        originalPlan: plan,
+        failedStep,
+        failedStepResult: failedStep.result,
+        currentExecutionContext: plan.executionContext,
+        reason: failedStep.evaluation?.reason || this.getAdjustmentReason(failedStep)
+      };
+      
+      // Gọi ActionPlanner để điều chỉnh kế hoạch
+      const adjustedPlan = await this.actionPlanner.adjustPlan(adjustmentInfo);
+      
+      if (adjustedPlan) {
+        // Đảm bảo các bước đã hoàn thành được giữ nguyên
+        adjustedPlan.steps.forEach((step, index) => {
+          const originalStep = plan.steps.find(s => s.id === step.id);
+          if (originalStep && 
+              [StepStatus.SUCCEEDED, StepStatus.SKIPPED].includes(originalStep.status)) {
+            step.status = originalStep.status;
+            step.result = originalStep.result;
+            step.evaluation = originalStep.evaluation;
+            step.startTime = originalStep.startTime;
+            step.endTime = originalStep.endTime;
+          }
+        });
+        
+        // Cập nhật context
+        adjustedPlan.executionContext = plan.executionContext;
+        adjustedPlan.startTime = plan.startTime;
+        adjustedPlan.overallProgress = this.calculateProgress(adjustedPlan);
+        
+        return adjustedPlan;
+      }
+    } catch (error) {
+      this.logger.error(`Lỗi khi điều chỉnh kế hoạch: ${error.message}`);
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Kiểm tra xem bước thất bại có cần điều chỉnh kế hoạch không
+   */
+  private needsPlanAdjustment(failedStep: ActionStep): boolean {
+    // Nếu đánh giá từ ActionPlanner cho biết cần điều chỉnh
+    if (failedStep.evaluation && failedStep.evaluation.needsAdjustment) {
+      return true;
+    }
+    
+    // Nếu là task không tồn tại
+    if (failedStep.result?.error?.code === 'ISSUE_NOT_FOUND') {
+      return true;
+    }
+    
+    // Nếu là phòng họp đã bị đặt
+    if (failedStep.result?.error?.code === 'ROOM_UNAVAILABLE') {
+      return true;
+    }
+    
+    // Nếu là bug cần phê duyệt đặc biệt
+    if (failedStep.agentType === AgentType.JIRA && 
+        failedStep.prompt.toLowerCase().includes('bug') && 
+        failedStep.result?.data?.bugs?.some(bug => bug.needsApproval)) {
+      return true;
+    }
+    
+    // Nếu sprint không đạt đủ tiến độ
+    if (failedStep.agentType === AgentType.JIRA && 
+        failedStep.prompt.toLowerCase().includes('tiến độ') && 
+        failedStep.result?.data?.progress < 80) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Lấy lý do cần điều chỉnh kế hoạch
+   */
+  private getAdjustmentReason(failedStep: ActionStep): string {
+    // Nếu đã có đánh giá từ ActionPlanner, sử dụng lý do từ đó
+    if (failedStep.evaluation && failedStep.evaluation.reason) {
+      return failedStep.evaluation.reason;
+    }
+    
+    if (failedStep.result?.error?.code === 'ISSUE_NOT_FOUND') {
+      return `Task không tồn tại: ${failedStep.result.error.message}`;
+    }
+    
+    if (failedStep.result?.error?.code === 'ROOM_UNAVAILABLE') {
+      return `Phòng họp không khả dụng: ${failedStep.result.error.message}. Các phòng họp khả dụng: ${failedStep.result.error.availableRooms?.join(', ')}`;
+    }
+    
+    if (failedStep.agentType === AgentType.JIRA && 
+        failedStep.prompt.toLowerCase().includes('bug') && 
+        failedStep.result?.data?.bugs?.some(bug => bug.needsApproval)) {
+      const approvalBugs = failedStep.result.data.bugs.filter(bug => bug.needsApproval);
+      return `Có ${approvalBugs.length} bug cần phê duyệt đặc biệt trước khi gán cho QA`;
+    }
+    
+    if (failedStep.agentType === AgentType.JIRA && 
+        failedStep.prompt.toLowerCase().includes('tiến độ') && 
+        failedStep.result?.data?.progress < 80) {
+      return `Tiến độ sprint chỉ đạt ${failedStep.result.data.progress}%, không đủ điều kiện để lên lịch họp review`;
+    }
+    
+    return `Bước ${failedStep.id} thất bại và cần điều chỉnh kế hoạch`;
   }
   
   /**
@@ -155,19 +297,23 @@ export class AgentCoordinator {
       // Lưu kết quả
       step.result = result;
       
-      // Cập nhật trạng thái
-      if (result.success) {
+      // Gửi kết quả cho ActionPlanner để đánh giá
+      const evaluation = await this.actionPlanner.evaluateStepResult(step, plan);
+      step.evaluation = evaluation;
+      
+      // Cập nhật trạng thái dựa trên đánh giá từ ActionPlanner
+      if (evaluation.success) {
         step.status = StepStatus.SUCCEEDED;
-        this.logger.log(`Bước ${step.id} thành công`);
+        this.logger.log(`Bước ${step.id} thành công theo đánh giá: ${evaluation.reason}`);
       } else {
         // Xử lý retry
         if (step.retryCount < (step.maxRetries || 2)) {
           step.retryCount = (step.retryCount || 0) + 1;
           step.status = StepStatus.RETRYING;
-          this.logger.warn(`Bước ${step.id} thất bại, thử lại lần ${step.retryCount}/${step.maxRetries}: ${result.error?.message}`);
+          this.logger.warn(`Bước ${step.id} thất bại theo đánh giá, thử lại lần ${step.retryCount}/${step.maxRetries}: ${evaluation.reason}`);
         } else {
           step.status = StepStatus.FAILED;
-          step.error = new Error(result.error?.message || 'Thực thi thất bại sau nhiều lần thử');
+          step.error = new Error(evaluation.reason || result.error?.message || 'Thực thi thất bại sau nhiều lần thử');
           this.logger.error(`Bước ${step.id} thất bại sau ${step.retryCount} lần thử: ${step.error.message}`);
         }
       }
@@ -178,6 +324,10 @@ export class AgentCoordinator {
         result: {
           ...(plan.executionContext.result || {}),
           [step.id]: step.result
+        },
+        evaluation: {
+          ...(plan.executionContext.evaluation || {}),
+          [step.id]: step.evaluation
         }
       };
       
@@ -186,6 +336,17 @@ export class AgentCoordinator {
       this.logger.error(`Lỗi khi thực thi bước ${step.id}: ${error.message}`);
       step.status = StepStatus.FAILED;
       step.error = error;
+      
+      // Cố gắng đánh giá ngay cả khi có lỗi
+      try {
+        step.evaluation = {
+          success: false,
+          reason: `Lỗi khi thực thi: ${error.message}`,
+          needsAdjustment: true
+        };
+      } catch (evalError) {
+        this.logger.error(`Không thể tạo đánh giá cho bước lỗi: ${evalError.message}`);
+      }
       
     } finally {
       step.endTime = new Date();

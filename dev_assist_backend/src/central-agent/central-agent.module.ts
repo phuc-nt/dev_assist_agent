@@ -9,7 +9,11 @@ import { ActionPlanner } from './action-planner/action-planner.service';
 import { ActionPlanEntity } from './entities/action-plan.entity';
 import { ActionPlanStorageService } from './file-storage/action-plan-storage.service';
 import { AgentCoordinator } from './agent-coordinator/agent-coordinator.service';
-import { AgentFactory, MockJiraAgent, MockSlackAgent } from './agent-factory/agent-factory.service';
+import { AgentFactory } from './agent-factory/agent-factory.service';
+import { MockJiraAgent } from './agents/mock-jira-agent';
+import { MockSlackAgent } from './agents/mock-slack-agent';
+import { MockConfluenceAgent } from './agents/mock-confluence-agent';
+import { MockCalendarAgent } from './agents/mock-calendar-agent';
 import { ConfigModule } from '../config/config.module';
 import { ResultSynthesizerService } from './result-synthesizer/result-synthesizer.service';
 
@@ -29,6 +33,8 @@ import { ResultSynthesizerService } from './result-synthesizer/result-synthesize
     AgentCoordinator,
     MockJiraAgent,
     MockSlackAgent,
+    MockConfluenceAgent,
+    MockCalendarAgent,
     AgentFactory,
     ResultSynthesizerService
   ],

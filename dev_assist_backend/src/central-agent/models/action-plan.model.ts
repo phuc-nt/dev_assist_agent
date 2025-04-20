@@ -4,6 +4,7 @@ export enum AgentType {
   EMAIL = 'EMAIL',
   CALENDAR = 'CALENDAR',
   MEETING_ROOM = 'MEETING_ROOM',
+  CONFLUENCE = 'CONFLUENCE',
 }
 
 export enum StepStatus {
@@ -35,6 +36,12 @@ export interface StepResult {
   };
 }
 
+export interface StepEvaluation {
+  success: boolean;
+  reason: string;
+  needsAdjustment: boolean;
+}
+
 export interface ActionStep {
   id: string;
   agentType: AgentType;
@@ -46,6 +53,7 @@ export interface ActionStep {
   timeout?: number;
   status: StepStatus;
   result?: StepResult;
+  evaluation?: StepEvaluation;
   startTime?: Date;
   endTime?: Date;
   error?: Error;

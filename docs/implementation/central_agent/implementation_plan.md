@@ -155,6 +155,133 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 - Đã cải thiện hiệu suất và độ tin cậy của hệ thống khi sử dụng các model mới
 - Đã kiểm thử tính toán chi phí với tất cả các model đã cấu hình
 
+### Phiên làm việc #10: Triển khai chức năng Điều chỉnh Kế hoạch (Plan Adjustment)
+- Đã triển khai phương thức `adjustPlan` trong `ActionPlanner` để hỗ trợ điều chỉnh kế hoạch khi gặp lỗi
+- Đã tạo hai phương thức hỗ trợ:
+  - `getAdjustmentSystemPrompt()`: Tạo system prompt cho việc điều chỉnh kế hoạch
+  - `getAdjustmentUserPrompt()`: Tạo user prompt chi tiết dựa trên kế hoạch gốc và bước bị lỗi
+- Đã cập nhật `AgentCoordinator` để hỗ trợ gọi `adjustPlan` khi cần điều chỉnh kế hoạch
+- Đã cải thiện cơ chế xử lý lỗi để xác định các trường hợp cần điều chỉnh kế hoạch:
+  - Task không tồn tại trong JIRA
+  - Phòng họp không khả dụng
+  - Người dùng không tồn tại
+  - Tài nguyên không được tìm thấy
+- Phương thức `adjustPlan` nhận vào thông tin điều chỉnh bao gồm:
+  - Kế hoạch ban đầu (originalPlan)
+  - Bước bị lỗi (failedStep)
+  - Kết quả của bước bị lỗi (failedStepResult)
+  - Ngữ cảnh thực thi hiện tại (currentExecutionContext)
+  - Lý do cần điều chỉnh (reason)
+- Kết quả trả về là một kế hoạch mới hoặc null nếu không thể điều chỉnh
+- Đã cập nhật logic trong `evaluateStepResult` để đánh giá khi nào cần điều chỉnh kế hoạch thông qua trường `needsAdjustment`
+- Đã cải thiện khả năng xử lý của Central Agent trong các tình huống ngoại lệ và lỗi không lường trước
+
+**Ví dụ triển khai interface cho điều chỉnh kế hoạch:**
+```typescript
+interface AdjustmentInfo {
+  originalPlan: ActionPlan;
+  failedStep: ActionStep;
+  failedStepResult: any;
+  currentExecutionContext: Record<string, any>;
+  reason: string;
+}
+
+async adjustPlan(adjustmentInfo: AdjustmentInfo): Promise<ActionPlan | null>
+```
+
+**Workflow điều chỉnh kế hoạch:**
+1. AgentCoordinator phát hiện bước thực thi thất bại
+2. Đánh giá kết quả thất bại với `evaluateStepResult`
+3. Nếu `needsAdjustment` là true, gọi `adjustPlan` với thông tin thích hợp
+4. LLM tạo kế hoạch mới dựa trên tình hình hiện tại
+5. Kế hoạch mới được thực thi thay thế kế hoạch cũ
+
+Việc triển khai chức năng điều chỉnh kế hoạch giúp Central Agent có khả năng thích ứng cao với các tình huống thay đổi, xử lý lỗi thông minh hơn, và cải thiện trải nghiệm người dùng khi hệ thống gặp phải các tình huống ngoại lệ không lường trước.
+
+### Ghi chú về kịch bản test "tôi xong việc hôm nay rồi"
+
+Đã thực hiện kiểm thử thành công kịch bản phức tạp "tôi xong việc hôm nay rồi" với các mock sub-agent:
+
+**Cấu hình Mock Sub-Agents:**
+- **MockJiraAgent**: 
+  - Đã cấu hình để trả về 3 task (XDEMO2-1, XDEMO2-2, XDEMO2-3) ở trạng thái "In Progress" hoặc "To Do" khi tìm kiếm
+  - Đã xử lý cập nhật trạng thái task sang "Done"
+  - Đã lưu lịch sử thay đổi trạng thái task
+  
+- **MockSlackAgent**: 
+  - Đã cấu hình để trả về 2 tin nhắn thảo luận về XDEMO2-1 và XDEMO2-2
+  - Đã xử lý đúng các yêu cầu gửi thông báo cập nhật task
+  - Đã thêm logic xử lý để phản hồi phù hợp với các tin nhắn xác nhận hoàn thành
+  
+- **MockConfluenceAgent**:
+  - Đã triển khai để xử lý tạo/cập nhật báo cáo hàng ngày
+  - Đã lưu trữ thông tin về công việc hoàn thành, đang thực hiện, kế hoạch và vấn đề gặp phải
+
+**Luồng thực thi:**
+1. Central Agent nhận yêu cầu "tôi xong việc hôm nay rồi" từ người dùng
+2. InputProcessor phân tích yêu cầu và xác định người dùng muốn cập nhật trạng thái các task đã hoàn thành
+3. ActionPlanner tạo kế hoạch 5 bước:
+   - Tìm các task đang thực hiện (JIRA)
+   - Tìm các thảo luận liên quan (SLACK)
+   - Cập nhật trạng thái task (JIRA)
+   - Gửi thông báo về việc cập nhật (SLACK)
+   - Cập nhật báo cáo hàng ngày (CONFLUENCE)
+4. AgentCoordinator thực thi từng bước trong kế hoạch
+5. ResultSynthesizer tổng hợp kết quả và trả về phản hồi cho người dùng
+
+**Kết quả kiểm thử:**
+- Toàn bộ luồng hoạt động 100% tự động, không cần người dùng cung cấp thêm thông tin
+- Các mock agent đã phản hồi đúng theo kịch bản đã định nghĩa
+- Kế hoạch được thực thi tuần tự và đúng thứ tự phụ thuộc
+- Phản hồi cuối cùng cho người dùng rõ ràng và đầy đủ thông tin
+
+**Cải tiến đã thực hiện trong quá trình test:**
+1. Thêm CONFLUENCE vào enum AgentType
+2. Cập nhật AgentFactory để hỗ trợ CONFLUENCE agent
+3. Sửa đổi mockSendMessage trong MockSlackAgent để xử lý chính xác các yêu cầu gửi thông báo
+
+Kịch bản này đã chứng minh khả năng của Central Agent trong việc xử lý quy trình công việc phức tạp, tích hợp nhiều hệ thống và điều phối luồng thông tin giữa các hệ thống.
+
+**Các file source code quan trọng liên quan đến kịch bản:**
+
+1. **Định nghĩa các agent type và cấu trúc kế hoạch:**
+   - `dev_assist_backend/src/central-agent/models/action-plan.model.ts`: Định nghĩa các enum và interfaces cơ bản như `AgentType`, `ActionStep`, `ActionPlan`
+   
+2. **Xử lý đầu vào và phân tích yêu cầu:**
+   - `dev_assist_backend/src/central-agent/input-processor/input-processor.service.ts`: Phân tích yêu cầu "tôi xong việc hôm nay rồi" thành mô tả có cấu trúc
+
+3. **Tạo kế hoạch hành động:**
+   - `dev_assist_backend/src/central-agent/action-planner/action-planner.service.ts`: Tạo kế hoạch 5 bước cho kịch bản
+   - `dev_assist_backend/src/central-agent/action-planner/prompts/planner-prompts.ts`: Chứa templates cho system/user prompts
+
+4. **Điều phối và thực thi kế hoạch:**
+   - `dev_assist_backend/src/central-agent/agent-coordinator/agent-coordinator.service.ts`: Điều phối thực thi các bước trong kế hoạch
+
+5. **Factory và định nghĩa mock agents:**
+   - `dev_assist_backend/src/central-agent/agent-factory/agent-factory.service.ts`: Khởi tạo các agents và định nghĩa các mock agents
+   - `dev_assist_backend/src/central-agent/agent-factory/mock/mock-jira-agent.ts`: Mock JIRA agent trả về và cập nhật tasks
+   - `dev_assist_backend/src/central-agent/agent-factory/mock/mock-slack-agent.ts`: Mock Slack agent xử lý tin nhắn và thông báo
+   - `dev_assist_backend/src/central-agent/agent-factory/mock/mock-confluence-agent.ts`: Mock Confluence agent cập nhật báo cáo
+
+6. **Tổng hợp kết quả:**
+   - `dev_assist_backend/src/central-agent/result-synthesizer/result-synthesizer.service.ts`: Tổng hợp kết quả từ các bước thực thi
+
+7. **API endpoints xử lý yêu cầu:**
+   - `dev_assist_backend/src/central-agent/central-agent.controller.ts`: API endpoints `/central-agent/process` xử lý yêu cầu
+   - `dev_assist_backend/src/central-agent/central-agent.service.ts`: Service điều phối toàn bộ quy trình
+
+8. **OpenAI integration:**
+   - `dev_assist_backend/src/openai/openai.service.ts`: Service giao tiếp với OpenAI
+   - `dev_assist_backend/src/config/llm.config.ts`: Cấu hình LLM và prompts
+
+9. **Lưu trữ và quản lý kế hoạch:**
+   - `dev_assist_backend/src/central-agent/action-plan-storage/action-plan-storage.service.ts`: Lưu trữ kế hoạch và kết quả thực thi
+
+10. **Logging và monitoring:**
+    - `dev_assist_backend/src/utils/enhanced-logger.ts`: Logger được nâng cao để theo dõi luồng thực thi
+
+Các file này hoạt động cùng nhau tạo thành một pipeline xử lý hoàn chỉnh cho kịch bản "tôi xong việc hôm nay rồi", từ việc nhận và phân tích yêu cầu đến việc lập kế hoạch, thực thi và trả về kết quả cuối cùng.
+
 ## Bài học kinh nghiệm
 1. **Cấu hình cổng kết nối**: Fix cứng cổng trong main.ts để tránh xung đột với các tiến trình khác
 2. **SQLite cho môi trường phát triển**: Cần đảm bảo gói `sqlite3` đã được cài đặt khi sử dụng TypeORM với SQLite
@@ -166,407 +293,4 @@ Kế hoạch triển khai Central Agent theo mô hình đã thiết kế, tập 
 8. **Xử lý điều kiện tiếng Việt**: Cần xử lý đặc biệt đối với các điều kiện bằng tiếng Việt trong phương thức evaluateCondition
 9. **Ánh xạ model cho thư viện tiktoken**: Khi sử dụng các model mới, cần ánh xạ sang các model mà thư viện tiktoken hỗ trợ
 10. **Cập nhật bảng giá thường xuyên**: Đảm bảo bảng giá được cập nhật theo giá mới nhất từ OpenAI
-
-## Chi tiết triển khai đã hoàn thành
-
-### Result Synthesizer
-Result Synthesizer đã được triển khai thành công với các tính năng:
-
-- Tổng hợp kết quả từ các bước thực thi thành câu trả lời mạch lạc, dễ hiểu
-- Tích hợp với OpenAI API thông qua chatWithFunctionCalling
-- Xử lý nhiều trường hợp khác nhau: thành công, thất bại, thực thi một phần
-- Cung cấp thông tin chi tiết và có tính context về quá trình thực thi
-- Ngữ cảnh tự nhiên và thân thiện với người dùng
-
-File structure triển khai:
-```
-src/central-agent/
-├── result-synthesizer/
-│   ├── result-synthesizer.service.ts
-│   └── result-synthesizer.spec.ts
-```
-
-### Cấu hình tập trung LLM
-Hệ thống cấu hình tập trung LLM đã được triển khai với các tính năng:
-
-- Cấu hình model và temperature được tập trung trong một file duy nhất
-- Cấu hình prompt cho từng thành phần (InputProcessor, ActionPlanner, ResultSynthesizer, v.v.)
-- API endpoints để quản lý cấu hình động
-- Logging chi tiết về việc sử dụng model và token
-- Override cấu hình từ biến môi trường
-
-File structure triển khai:
-```
-src/
-├── config/
-│   └── llm.config.ts
-├── openai/
-│   ├── openai.service.ts
-│   └── openai.controller.ts
-```
-
-### Cơ chế ánh xạ model cho tính toán token
-Đã triển khai cơ chế ánh xạ model để xử lý các model mới chưa được tiktoken hỗ trợ:
-
-- Sử dụng bảng ánh xạ để chuyển đổi từ model mới sang model được hỗ trợ
-- Xử lý lỗi "Invalid model" khi thư viện tiktoken không nhận diện được model
-- Đảm bảo tính toán token chính xác cho tất cả model sử dụng trong hệ thống
-
-File structure triển khai:
-```
-src/utils/
-└── token-counter.ts
-```
-
-Ví dụ implementation:
-```typescript
-function mapToSupportedModel(model: string): string {
-  const modelMap: Record<string, string> = {
-    'gpt-4.1-mini': 'gpt-4',
-    'gpt-4.1': 'gpt-4',
-    'gpt-4.1-nano': 'gpt-4',
-    'gpt-4o': 'gpt-4',
-    'gpt-4o-mini': 'gpt-4',
-    'o3': 'gpt-3.5-turbo',
-    'o4-mini': 'gpt-4'
-  };
-
-  return modelMap[model] || model;
-}
-```
-
-## Kế hoạch tiếp theo
-
-### 1. Hoàn thiện API Documentation
-- Tạo Swagger document đầy đủ cho tất cả API endpoints
-- Thêm mô tả chi tiết cho các DTO và entities
-- Tạo hướng dẫn sử dụng API cho các nhà phát triển tiếp theo
-- Mô tả các luồng làm việc chính và cách tích hợp
-
-### 2. Cải thiện hiệu suất và reliability
-- Tối ưu hóa prompt để giảm chi phí token
-- Cải thiện cơ chế retry và xử lý lỗi
-- Thêm logging chi tiết hơn để dễ debug
-- Tạo các kịch bản test tự động
-
-### 3. Triển khai Sub-Agents thực
-Sau khi đã hoàn thiện Central Agent với mock Sub-Agents, bước tiếp theo sẽ là triển khai các Sub-Agents thực tế:
-
-1. JIRA Agent: Tích hợp với JIRA API thực tế
-2. Slack Agent: Tích hợp với Slack API thực tế
-3. Thay thế các mock agents bằng các agents thực trong hệ thống
-
-**Dự kiến triển khai JIRA Agent:**
-```typescript
-@Injectable()
-export class JiraAgent {
-  private readonly logger = EnhancedLogger.getLogger(JiraAgent.name);
-  private readonly jiraApiService: JiraApiService;
-  
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly openaiService: OpenaiService,
-  ) {
-    this.jiraApiService = new JiraApiService(
-      configService.get('JIRA_DOMAIN'),
-      configService.get('JIRA_EMAIL'),
-      configService.get('JIRA_API_TOKEN'),
-    );
-  }
-  
-  async execute(prompt: string): Promise<AgentResponse> {
-    try {
-      this.logger.log(`JIRA Agent executing: ${prompt}`);
-      const startTime = Date.now();
-      
-      // Sử dụng OpenAI để phân tích prompt và xác định hành động JIRA cần thực hiện
-      const analysis = await this.openaiService.chatWithFunctionCalling(
-        this.getSystemPrompt(),
-        prompt
-      );
-      
-      // Thực hiện hành động JIRA thông qua JiraApiService
-      // ... code thực thi các hành động JIRA ...
-      
-      const executionTime = Date.now() - startTime;
-      
-      return {
-        success: true,
-        data: {
-          // Kết quả từ JIRA API
-        },
-        metadata: {
-          executionTime,
-          tokenUsage: 150 // estimation
-        }
-      };
-    } catch (error) {
-      this.logger.error(`Error executing JIRA Agent: ${error.message}`);
-      return {
-        success: false,
-        error: {
-          message: error.message
-        },
-        metadata: {}
-      };
-    }
-  }
-  
-  private getSystemPrompt(): string {
-    // System prompt cho JIRA agent
-  }
-}
-```
-
-### 4. Triển khai Cost Monitoring
-Việc triển khai Cost Monitoring sẽ tập trung vào các khía cạnh sau:
-
-#### 4.1 Token Usage Tracking
-- Theo dõi số lượng token đầu vào và đầu ra cho mỗi lần gọi API
-- Lưu trữ thông tin về model được sử dụng, prompt, kích thước phản hồi
-- Tính toán chi phí dựa trên giá tiền cho mỗi model theo bảng giá của OpenAI
-
-#### 4.2 Cấu trúc dữ liệu
-```typescript
-interface TokenUsage {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-}
-
-interface ModelCostConfig {
-  model: string;
-  promptTokenCost: number;  // USD per 1K tokens
-  completionTokenCost: number;  // USD per 1K tokens
-}
-
-interface LLMUsageRecord {
-  id: string;
-  timestamp: Date;
-  model: string;
-  component: string;  // InputProcessor, ActionPlanner, etc.
-  operation: string;  // chat, chatWithSystem, chatWithFunctionCalling
-  tokenUsage: TokenUsage;
-  cost: number;  // USD
-  metadata?: Record<string, any>;
-}
-```
-
-#### 4.3 Bảng chi phí dự kiến
-```typescript
-const MODEL_COST_CONFIG: Record<string, ModelCostConfig> = {
-  'gpt-4o': {
-    promptTokenCost: 0.01,  // $0.01 per 1K tokens
-    completionTokenCost: 0.03  // $0.03 per 1K tokens
-  },
-  'gpt-4-turbo': {
-    promptTokenCost: 0.01,
-    completionTokenCost: 0.03
-  },
-  'gpt-4.1-mini': {
-    promptTokenCost: 0.0025, 
-    completionTokenCost: 0.0075
-  },
-  'gpt-3.5-turbo': {
-    promptTokenCost: 0.0005,
-    completionTokenCost: 0.0015
-  }
-};
-```
-
-#### 4.4 Cập nhật OpenaiService
-OpenaiService sẽ được cập nhật để tính toán và lưu trữ thông tin sử dụng token:
-
-```typescript
-@Injectable()
-export class OpenaiService {
-  // ... existing code ...
-  
-  private readonly modelCostConfig: Record<string, ModelCostConfig>;
-  private readonly tokenUsageRepository: Repository<LLMUsageRecord>;
-  
-  async chat(prompt: string, component: string = 'unknown') {
-    try {
-      const startTime = Date.now();
-      
-      const response = await this.openai.chat.completions.create({
-        model: this.llmConfig.model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: this.llmConfig.temperature,
-        max_tokens: this.llmConfig.maxTokens,
-      });
-      
-      const executionTime = Date.now() - startTime;
-      
-      // Lưu thông tin sử dụng token
-      await this.trackTokenUsage({
-        model: this.llmConfig.model,
-        component,
-        operation: 'chat',
-        tokenUsage: {
-          promptTokens: response.usage.prompt_tokens,
-          completionTokens: response.usage.completion_tokens,
-          totalTokens: response.usage.total_tokens
-        },
-        executionTime
-      });
-      
-      return response.choices[0]?.message?.content || '';
-    } catch (error) {
-      // ... error handling ...
-    }
-  }
-  
-  private async trackTokenUsage(data: {
-    model: string;
-    component: string;
-    operation: string;
-    tokenUsage: TokenUsage;
-    executionTime: number;
-    metadata?: Record<string, any>;
-  }) {
-    const { model, component, operation, tokenUsage, executionTime, metadata } = data;
-    
-    // Tính chi phí dựa trên model và usage
-    const costConfig = this.modelCostConfig[model] || this.modelCostConfig['gpt-3.5-turbo'];
-    
-    const promptCost = (tokenUsage.promptTokens / 1000) * costConfig.promptTokenCost;
-    const completionCost = (tokenUsage.completionTokens / 1000) * costConfig.completionTokenCost;
-    const totalCost = promptCost + completionCost;
-    
-    // Lưu vào database
-    const usageRecord = this.tokenUsageRepository.create({
-      timestamp: new Date(),
-      model,
-      component,
-      operation,
-      tokenUsage,
-      cost: totalCost,
-      metadata: {
-        ...metadata,
-        executionTime
-      }
-    });
-    
-    await this.tokenUsageRepository.save(usageRecord);
-    
-    this.logger.log(
-      `LLM Usage - Model: ${model}, Component: ${component}, Operation: ${operation}, ` +
-      `Tokens: ${tokenUsage.totalTokens}, Cost: $${totalCost.toFixed(6)}`
-    );
-    
-    return usageRecord;
-  }
-  
-  // API endpoints để truy vấn chi phí
-  async getDailyCost(date: Date = new Date()): Promise<{ cost: number; usage: TokenUsage }> {
-    // Truy vấn chi phí theo ngày
-  }
-  
-  async getMonthlyCost(year: number, month: number): Promise<{ cost: number; usage: TokenUsage }> {
-    // Truy vấn chi phí theo tháng
-  }
-  
-  async getUsageByComponent(): Promise<Record<string, { cost: number; usage: TokenUsage }>> {
-    // Truy vấn chi phí theo component
-  }
-  
-  async getUsageByModel(): Promise<Record<string, { cost: number; usage: TokenUsage }>> {
-    // Truy vấn chi phí theo model
-  }
-}
-```
-
-#### 4.5 REST API Endpoints
-```typescript
-@Controller('cost-monitoring')
-export class CostMonitoringController {
-  constructor(private readonly costMonitoringService: CostMonitoringService) {}
-  
-  @Get('daily')
-  getDailyCost(@Query('date') dateStr: string) {
-    const date = dateStr ? new Date(dateStr) : new Date();
-    return this.costMonitoringService.getDailyCost(date);
-  }
-  
-  @Get('monthly')
-  getMonthlyCost(
-    @Query('year') yearStr: string,
-    @Query('month') monthStr: string
-  ) {
-    const year = yearStr ? parseInt(yearStr) : new Date().getFullYear();
-    const month = monthStr ? parseInt(monthStr) : new Date().getMonth() + 1;
-    return this.costMonitoringService.getMonthlyCost(year, month);
-  }
-  
-  @Get('by-component')
-  getUsageByComponent() {
-    return this.costMonitoringService.getUsageByComponent();
-  }
-  
-  @Get('by-model')
-  getUsageByModel() {
-    return this.costMonitoringService.getUsageByModel();
-  }
-}
-```
-
-#### 4.6 Cảnh báo chi phí
-```typescript
-@Injectable()
-export class CostAlertService {
-  constructor(
-    private readonly costMonitoringService: CostMonitoringService,
-    private readonly configService: ConfigService,
-    private readonly notificationService: NotificationService,
-    private readonly logger: Logger
-  ) {}
-  
-  @Cron('0 0 * * * *')  // Chạy mỗi giờ
-  async checkDailyCostThreshold() {
-    const dailyThreshold = this.configService.get<number>('DAILY_COST_THRESHOLD', 1.0);  // $1 mặc định
-    const dailyCost = await this.costMonitoringService.getDailyCost();
-    
-    if (dailyCost.cost >= dailyThreshold) {
-      this.logger.warn(`Daily cost threshold exceeded: $${dailyCost.cost} >= $${dailyThreshold}`);
-      await this.notificationService.sendAlert({
-        title: 'Cost Threshold Alert',
-        message: `Daily cost threshold exceeded: $${dailyCost.cost} >= $${dailyThreshold}`,
-        level: 'warning'
-      });
-    }
-  }
-  
-  @Cron('0 0 0 * * *')  // Chạy mỗi ngày
-  async checkMonthlyCostThreshold() {
-    const year = new Date().getFullYear();
-    const month = new Date().getMonth() + 1;
-    const monthlyThreshold = this.configService.get<number>('MONTHLY_COST_THRESHOLD', 10.0);  // $10 mặc định
-    
-    const monthlyCost = await this.costMonitoringService.getMonthlyCost(year, month);
-    
-    if (monthlyCost.cost >= monthlyThreshold) {
-      this.logger.warn(`Monthly cost threshold exceeded: $${monthlyCost.cost} >= $${monthlyThreshold}`);
-      await this.notificationService.sendAlert({
-        title: 'Cost Threshold Alert',
-        message: `Monthly cost threshold exceeded: $${monthlyCost.cost} >= $${monthlyThreshold}`,
-        level: 'warning'
-      });
-    }
-  }
-}
-```
-
-#### 4.7 Cơ chế token counting
-Để tính toán chính xác số lượng token từ prompt và completion, sẽ sử dụng thư viện tiktoken:
-```typescript
-import { encode } from 'tiktoken';
-
-export function countTokens(text: string, model: string = 'gpt-3.5-turbo'): number {
-  const encoder = encode(model);
-  const tokens = encoder.encode(text);
-  return tokens.length;
-}
-```
-
-Việc tích hợp Cost Monitoring sẽ giúp theo dõi và kiểm soát chi phí sử dụng LLM một cách hiệu quả, đồng thời cung cấp thông tin chi tiết để có thể tối ưu hóa việc sử dụng prompt và model.
+11. **Điều chỉnh kế hoạch dựa trên LLM**: Sử dụng LLM để tạo kế hoạch thay thế là cách tiếp cận hiệu quả, nhưng cần đảm bảo hướng dẫn rõ ràng (prompt) để có kết quả như mong đợi
