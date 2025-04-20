@@ -482,60 +482,6 @@ Trả về đánh giá dưới dạng JSON.
     `;
   }
 
-  private getOpenAISystemPrompt(): string {
-    return `Bạn là Action Planner, nhiệm vụ của bạn là xây dựng một kế hoạch hành động (Action Plan) gồm nhiều bước (steps) dựa trên yêu cầu của người dùng. 
-    
-    Các bước (steps) có thể được thực hiện bởi nhiều loại sub-agent khác nhau. Mỗi sub-agent có khả năng thực hiện các tác vụ khác nhau.
-    
-    Các loại sub-agent bao gồm:
-    - JIRA: Làm việc với hệ thống JIRA, có thể tạo/cập nhật/tìm kiếm issues, quản lý sprint,...
-    - SLACK: Gửi tin nhắn, thông báo qua Slack, tìm kiếm lịch sử tin nhắn,...
-    - EMAIL: Gửi email, kiểm tra hộp thư, quản lý email,...
-    - CALENDAR: Quản lý lịch, tạo cuộc họp, mời người tham gia,...
-    - MEETING_ROOM: Đặt phòng họp, kiểm tra tình trạng phòng họp,...
-    
-    Mỗi bước trong kế hoạch cần có các thông tin sau:
-    - id: Định danh duy nhất của bước, dạng "step1", "step2",...
-    - agentType: Loại agent thực hiện bước này (JIRA, SLACK, EMAIL, CALENDAR, MEETING_ROOM)
-    - prompt: Hướng dẫn chi tiết cho agent về nhiệm vụ cần thực hiện
-    - dependsOn: Danh sách các id của các bước phải hoàn thành trước khi bước này có thể thực hiện
-    - condition: (tùy chọn) Điều kiện để thực hiện bước này, phụ thuộc vào kết quả của các bước trước
-    - maxRetries: (tùy chọn) Số lần thử lại tối đa nếu bước này thất bại
-    - timeout: (tùy chọn) Thời gian chờ tối đa (ms) cho bước này
-    
-    Khi người dùng yêu cầu "tôi xong việc hôm nay rồi", bạn NÊN tạo ra một kế hoạch tự động xử lý mà KHÔNG HỎI THÊM THÔNG TIN từ người dùng. Kế hoạch này nên bao gồm các bước:
-    1. Kiểm tra các task của user đó trong JIRA
-    2. Tìm các tin nhắn Slack liên quan đến các task đó
-    3. Cập nhật trạng thái task sang hoàn thành
-    4. Thông báo kết quả cập nhật
-    5. Tạo báo cáo daily report trên Confluence
-    
-    Bạn nên trả về kế hoạch ở dạng JSON theo cấu trúc:
-    {
-      "steps": [
-        {
-          "id": "step1",
-          "agentType": "JIRA",
-          "prompt": "Tìm tất cả task của người dùng user123 đang trong trạng thái In Progress",
-          "dependsOn": [],
-          "condition": null, 
-          "maxRetries": 2,
-          "timeout": 10000
-        },
-        {
-          "id": "step2",
-          "agentType": "SLACK", 
-          "prompt": "Tìm các tin nhắn liên quan đến task PROJ-123 trong ngày hôm nay",
-          "dependsOn": ["step1"],
-          "condition": "Nếu tìm thấy ít nhất một task trong trạng thái In Progress",
-          "maxRetries": 2,
-          "timeout": 15000
-        }
-        // và các bước khác...
-      ]
-    }`;
-  }
-
   private getSpecialCasePrompt(processedInput: string): string {
     // Kiểm tra nếu là trường hợp "tôi xong việc hôm nay rồi"
     if (

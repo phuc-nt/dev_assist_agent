@@ -31,18 +31,79 @@ export class MockSlackAgent implements IAgent {
    * Tìm kiếm tin nhắn
    */
   private mockSearchMessages(prompt: string): StepResult {
+    // Kiểm tra xem prompt có đề cập đến task XDEMO2 không
+    const taskMatches = prompt.match(/XDEMO2-\d+/g);
+    const taskIds = taskMatches ? [...new Set(taskMatches)] : [];
+    
+    // Tạo danh sách tin nhắn động dựa trên context
+    let messages = [];
+    
+    // Nếu tìm thấy các task cụ thể, tạo tin nhắn liên quan đến chúng
+    if (taskIds.length > 0) {
+      messages = taskIds.map(taskId => {
+        // Tạo các loại tin nhắn khác nhau cho mỗi task
+        return {
+          text: `Đã hoàn thành task ${taskId}. Code đã được review và merge.`,
+          user: 'U12345',
+          timestamp: new Date(Date.now() - Math.floor(Math.random() * 86400000)).toISOString(),
+          channel: 'general',
+          threadTs: `${Date.now() - 3600000}.${Math.floor(Math.random() * 1000000)}`
+        };
+      });
+    } 
+    // Nếu tìm kiếm về việc hoàn thành công việc 
+    else if (prompt.toLowerCase().includes('hoàn thành') || 
+             prompt.toLowerCase().includes('xong việc') || 
+             prompt.toLowerCase().includes('done')) {
+      messages = [
+        {
+          text: 'Đã hoàn thành task XDEMO2-1. PR đã được merge.',
+          user: 'U12345',
+          timestamp: new Date(Date.now() - 3600000).toISOString(),
+          channel: 'general'
+        },
+        {
+          text: 'Đã xong task XDEMO2-2 và XDEMO2-3. Cần team review code.',
+          user: 'U67890',
+          timestamp: new Date(Date.now() - 7200000).toISOString(),
+          channel: 'dev-team'
+        },
+        {
+          text: 'Tôi đã hoàn thành tất cả công việc được giao hôm nay (XDEMO2-5, XDEMO2-7)',
+          user: 'U12345',
+          timestamp: new Date(Date.now() - 1800000).toISOString(),
+          channel: 'status-updates'
+        }
+      ];
+    }
+    // Tìm kiếm mặc định
+    else {
+      messages = [
+        {
+          text: 'Đã hoàn thành task XDEMO2-1',
+          user: 'U12345',
+          timestamp: new Date().toISOString(),
+          channel: 'general'
+        },
+        {
+          text: 'Cần review task XDEMO2-2',
+          user: 'U67890',
+          timestamp: new Date().toISOString(),
+          channel: 'dev-team'
+        }
+      ];
+    }
+    
     return {
       success: true,
       data: {
-        messages: [
-          { text: 'Đã hoàn thành task XDEMO2-1', user: 'U12345', timestamp: new Date().toISOString() },
-          { text: 'Cần review task XDEMO2-2', user: 'U67890', timestamp: new Date().toISOString() }
-        ],
-        total: 2
+        messages,
+        total: messages.length,
+        query: prompt.substring(0, 50)
       },
       metadata: {
-        executionTime: 310,
-        tokenUsage: 160
+        executionTime: 310 + messages.length * 10,
+        tokenUsage: 160 + messages.length * 20
       }
     };
   }
@@ -232,6 +293,61 @@ export class MockSlackAgent implements IAgent {
    * Lấy các tin nhắn liên quan đến một task
    */
   private mockGetConversationForTask(prompt: string): StepResult {
+    // Tìm mã task XDEMO2-xxx trong prompt
+    const taskMatches = prompt.match(/XDEMO2-\d+/g);
+    const taskIds = taskMatches ? [...new Set(taskMatches)] : [];
+    
+    // Nếu có tìm thấy task nào không
+    if (taskIds.length > 0) {
+      // Tạo tin nhắn cho mỗi task được đề cập
+      const allMessages = taskIds.flatMap(taskId => {
+        // Số id từ mã task
+        const taskNumber = parseInt(taskId.split('-')[1]);
+        
+        // Tạo các tin nhắn liên quan đến task này
+        return [
+          {
+            author: "user123",
+            text: `Tôi bắt đầu làm task ${taskId}`,
+            timestamp: new Date(Date.now() - 86400000).toISOString(),
+            channel: "dev-team"
+          },
+          {
+            author: "team_lead",
+            text: `${taskId} cần được hoàn thành trước thứ 6 nhé`,
+            timestamp: new Date(Date.now() - 72000000).toISOString(),
+            channel: "dev-team"
+          },
+          {
+            author: "user123",
+            text: `Đã hoàn thành task ${taskId}, PR: https://github.com/example/PR-${taskNumber}`,
+            timestamp: new Date(Date.now() - 28800000).toISOString(),
+            channel: "dev-team"
+          },
+          {
+            author: "reviewer",
+            text: `Đã approve PR của task ${taskId}`,
+            timestamp: new Date(Date.now() - 14400000).toISOString(),
+            channel: "dev-team"
+          }
+        ];
+      });
+      
+      return {
+        success: true,
+        data: {
+          messages: allMessages,
+          channel: "dev-team",
+          taskIds,
+          total: allMessages.length
+        },
+        metadata: {
+          executionTime: 380 + taskIds.length * 50,
+          tokenUsage: 160 + taskIds.length * 40
+        }
+      };
+    }
+    
     // Nếu prompt đề cập đến DEV-123
     if (prompt.toLowerCase().includes('dev-123')) {
       return {
@@ -267,17 +383,56 @@ export class MockSlackAgent implements IAgent {
       };
     }
 
-    // Fallback cho các task khác
+    // Fallback cho trường hợp tìm kiếm về việc hoàn thành công việc
+    if (prompt.toLowerCase().includes('hoàn thành') || 
+        prompt.toLowerCase().includes('xong việc') ||
+        prompt.toLowerCase().includes('done')) {
+      return {
+        success: true,
+        data: {
+          messages: [
+            { 
+              text: 'Tôi đã hoàn thành các task XDEMO2-1, XDEMO2-3 và XDEMO2-5 hôm nay', 
+              user: 'user123', 
+              timestamp: new Date(Date.now() - 3600000).toISOString(),
+              channel: "status-updates"
+            },
+            { 
+              text: 'Great job! Cần cập nhật JIRA để team biết', 
+              user: 'manager', 
+              timestamp: new Date(Date.now() - 3500000).toISOString(),
+              channel: "status-updates" 
+            },
+            { 
+              text: 'Đã update JIRA status rồi. Đã set các task sang Done.', 
+              user: 'user123', 
+              timestamp: new Date(Date.now() - 3400000).toISOString(),
+              channel: "status-updates"
+            }
+          ],
+          channel: "status-updates",
+          query: "hoàn thành công việc",
+          total: 3
+        },
+        metadata: {
+          executionTime: 310,
+          tokenUsage: 160
+        }
+      };
+    }
+
+    // Fallback cho các trường hợp khác
     return {
       success: true,
       data: {
         messages: [
-          { text: 'Tôi đang làm task này', user: 'U12345', timestamp: '2023-04-19T10:30:00Z' },
-          { text: 'Cần trợ giúp về phần ABC', user: 'U12345', timestamp: '2023-04-19T11:45:00Z' },
-          { text: 'Đã giải quyết được vấn đề', user: 'U12345', timestamp: '2023-04-19T15:20:00Z' }
+          { text: 'Tôi đang làm task này', user: 'U12345', timestamp: '2023-04-19T10:30:00Z', channel: "general" },
+          { text: 'Cần trợ giúp về phần ABC', user: 'U12345', timestamp: '2023-04-19T11:45:00Z', channel: "general" },
+          { text: 'Đã giải quyết được vấn đề', user: 'U12345', timestamp: '2023-04-19T15:20:00Z', channel: "general" }
         ],
         channel: "general",
-        total: 3
+        total: 3,
+        query: prompt.substring(0, 50)
       },
       metadata: {
         executionTime: 310,

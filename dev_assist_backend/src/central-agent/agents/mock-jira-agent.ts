@@ -69,7 +69,8 @@ export class MockJiraAgent implements IAgent {
               dueDate: '2025-04-20',
               completedDate: '2025-04-20T14:30:00.000Z',
               priority: 'Medium',
-              url: 'https://example.com/jira/XDEMO2-5'
+              url: 'https://example.com/jira/XDEMO2-5',
+              lastUpdated: '2025-04-20T14:30:00.000Z'
             },
             {
               id: 'XDEMO2-7',
@@ -80,7 +81,8 @@ export class MockJiraAgent implements IAgent {
               dueDate: '2025-04-21',
               completedDate: '2025-04-20T16:45:00.000Z',
               priority: 'High',
-              url: 'https://example.com/jira/XDEMO2-7'
+              url: 'https://example.com/jira/XDEMO2-7',
+              lastUpdated: '2025-04-20T16:45:00.000Z'
             }
           ],
           totalFound: 2,
@@ -106,7 +108,8 @@ export class MockJiraAgent implements IAgent {
             assignee: userId,
             dueDate: '2025-04-30',
             priority: 'High',
-            url: 'https://example.com/jira/XDEMO2-1'
+            url: 'https://example.com/jira/XDEMO2-1',
+            lastUpdated: '2025-04-20T09:15:00.000Z'
           },
           {
             id: 'XDEMO2-2',
@@ -116,7 +119,8 @@ export class MockJiraAgent implements IAgent {
             assignee: userId,
             dueDate: '2025-05-05',
             priority: 'Medium',
-            url: 'https://example.com/jira/XDEMO2-2'
+            url: 'https://example.com/jira/XDEMO2-2',
+            lastUpdated: '2025-04-19T16:30:00.000Z'
           },
           {
             id: 'XDEMO2-3',
@@ -126,7 +130,8 @@ export class MockJiraAgent implements IAgent {
             assignee: userId,
             dueDate: '2025-04-28',
             priority: 'Low',
-            url: 'https://example.com/jira/XDEMO2-3'
+            url: 'https://example.com/jira/XDEMO2-3',
+            lastUpdated: '2025-04-20T11:45:00.000Z'
           }
         ],
         totalFound: 3,
@@ -143,16 +148,28 @@ export class MockJiraAgent implements IAgent {
    * Cập nhật trạng thái task
    */
   private updateTask(prompt: string): StepResult {
-    let taskKey = '';
-    let matches = prompt.match(/XDEMO2-\d+/);
+    // Tìm tất cả mã task trong prompt
+    const taskMatches = prompt.match(/XDEMO2-\d+/g);
     
-    if (matches) {
-      taskKey = matches[0];
+    // Danh sách task để cập nhật
+    let taskKeys: string[] = [];
+    
+    if (taskMatches && taskMatches.length > 0) {
+      // Loại bỏ các mã task trùng lặp
+      taskKeys = [...new Set(taskMatches)];
     } else {
-      // Nếu không tìm thấy mã task cụ thể, giả định là XDEMO2-5
-      taskKey = 'XDEMO2-5';
+      // Nếu không tìm thấy mã task cụ thể, sử dụng danh sách mặc định
+      taskKeys = ['XDEMO2-1', 'XDEMO2-2', 'XDEMO2-3'];
+      
+      // Kiểm tra nếu prompt có đề cập đến "tất cả" hoặc "all"
+      if (prompt.toLowerCase().includes('tất cả') || 
+          prompt.toLowerCase().includes('all') ||
+          prompt.toLowerCase().includes('các task')) {
+        taskKeys = ['XDEMO2-1', 'XDEMO2-2', 'XDEMO2-3', 'XDEMO2-5', 'XDEMO2-7'];
+      }
     }
     
+    // Xác định trạng thái cần cập nhật
     let status = '';
     if (prompt.toLowerCase().includes('done') || prompt.toLowerCase().includes('hoàn thành')) {
       status = 'Done';
@@ -164,19 +181,26 @@ export class MockJiraAgent implements IAgent {
       status = 'Done'; // Mặc định là Done nếu không xác định được
     }
     
+    // Tạo danh sách các tasks đã cập nhật
+    const updatedTasks = taskKeys.map(key => ({
+      key,
+      oldStatus: 'In Progress',
+      newStatus: status,
+      updatedBy: 'user123',
+      timestamp: new Date().toISOString()
+    }));
+    
     return {
       success: true,
       data: {
-        taskKey: taskKey,
-        oldStatus: 'In Progress',
-        newStatus: status,
-        updatedBy: 'user123',
-        timestamp: new Date().toISOString(),
-        message: `Đã cập nhật task ${taskKey} sang trạng thái ${status}`
+        updatedTasks,
+        totalUpdated: taskKeys.length,
+        status,
+        message: `Đã cập nhật ${taskKeys.length} task sang trạng thái ${status}: ${taskKeys.join(', ')}`
       },
       metadata: {
-        executionTime: 600,
-        tokenUsage: 190
+        executionTime: 600 + taskKeys.length * 50, // Thêm 50ms cho mỗi task
+        tokenUsage: 190 + taskKeys.length * 10 // Thêm 10 token cho mỗi task
       }
     };
   }
