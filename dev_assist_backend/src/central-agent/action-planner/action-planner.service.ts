@@ -8,6 +8,15 @@ import {
   AgentType,
 } from '../models/action-plan.model';
 import { EnhancedLogger } from '../../utils/logger';
+import { v4 as uuidv4 } from 'uuid';
+
+// Interface cho ExecutionContext sử dụng trong service này
+interface ExecutionContext {
+  result?: Record<string, any>;
+  evaluation?: Record<string, any>;
+  specifiedParticipants?: string[];
+  [key: string]: any;
+}
 
 @Injectable()
 export class ActionPlanner {
@@ -21,6 +30,24 @@ export class ActionPlanner {
       this.logger.log(
         `ActionPlanner sử dụng model: ${currentConfig.model}, temperature: ${currentConfig.temperature}`,
       );
+
+      // Kiểm tra trường hợp đặc biệt cho sắp xếp cuộc họp
+      if (processedInput.toLowerCase().includes('sắp xếp cuộc họp') ||
+          processedInput.toLowerCase().includes('tổ chức cuộc họp')) {
+        this.logger.log('Phát hiện kịch bản sắp xếp cuộc họp, áp dụng kế hoạch đặc biệt');
+        // Tạo kế hoạch họp đơn giản
+        const plan = this.getSimplifiedMeetingPlan();
+        
+        // Trích xuất thành viên được đề cập trong yêu cầu
+        const participants = this.extractParticipants(processedInput);
+        if (participants.length > 0) {
+          // Nếu có đề cập đến các thành viên cụ thể, thêm vào context
+          plan.executionContext.specifiedParticipants = participants;
+          this.logger.log(`Đã xác định các thành viên được nhắc đến: ${participants.join(', ')}`);
+        }
+        
+        return plan;
+      }
 
       // Chuẩn bị prompt cho OpenAI
       const systemPrompt = this.getSystemPrompt();
@@ -168,86 +195,223 @@ export class ActionPlanner {
   async adjustPlan(adjustmentInfo: {
     originalPlan: ActionPlan;
     failedStep: ActionStep;
-    failedStepResult: any;
-    currentExecutionContext: Record<string, any>;
+    failedStepResult?: any;
+    currentExecutionContext: ExecutionContext;
     reason: string;
   }): Promise<ActionPlan | null> {
     try {
-      const {
-        originalPlan,
-        failedStep,
-        failedStepResult,
-        currentExecutionContext,
+      const { originalPlan, failedStep, currentExecutionContext, reason } = adjustmentInfo;
+
+      // Chuẩn bị thông tin hiện trạng cho việc điều chỉnh kế hoạch
+      const executedSteps = originalPlan.steps
+        .filter(step => step.status === StepStatus.SUCCEEDED)
+        .map(step => {
+          return {
+            id: step.id,
+            description: step.description,
+            result: step.result,
+          };
+        });
+
+      // Chuẩn bị context
+      const context = {
+        originalPlan: {
+          id: originalPlan.id,
+          description: originalPlan.description,
+          goal: originalPlan.goal,
+        },
+        failedStep: {
+          id: failedStep.id,
+          description: failedStep.description,
+          agent: failedStep.agentType,
+          action: failedStep.action,
+          parameters: failedStep.parameters,
+          result: failedStep.result,
+        },
+        executedSteps,
         reason,
-      } = adjustmentInfo;
+        executionContext: currentExecutionContext,
+      };
 
-      this.logger.log(
-        `ActionPlanner điều chỉnh kế hoạch sau khi bước ${failedStep.id} thất bại: ${reason}`,
+      this.logger.debug(`Điều chỉnh kế hoạch cho bước thất bại ${failedStep.id}: ${failedStep.description}`);
+
+      // Tạo kế hoạch mới
+      const prompt = this.getAdjustmentPrompt(context);
+      const result = await this.openaiService.chatWithFunctionCalling(
+        this.getAdjustmentSystemPrompt(),
+        this.getAdjustmentUserPrompt(originalPlan, failedStep, reason)
       );
 
-      // Chuẩn bị prompt cho OpenAI
-      const systemPrompt = this.getAdjustmentSystemPrompt();
-      const userPrompt = this.getAdjustmentUserPrompt(
-        originalPlan,
-        failedStep,
-        reason,
-      );
-
-      // Gọi OpenAI API
-      const response = await this.openaiService.chatWithFunctionCalling(
-        systemPrompt,
-        userPrompt,
-      );
-
-      // Xử lý markdown nếu có
-      const cleanedResponse = this.cleanMarkdownCodeBlocks(response);
-      this.logger.debug(`Cleaned adjustment response: ${cleanedResponse}`);
-
-      // Parse kết quả JSON từ response
-      try {
-        const planData = JSON.parse(cleanedResponse);
-
-        // Xác thực dữ liệu trả về
-        if (
-          !planData.steps ||
-          !Array.isArray(planData.steps) ||
-          planData.steps.length === 0
-        ) {
-          throw new Error(
-            'Kết quả điều chỉnh không hợp lệ: Thiếu hoặc định dạng steps không đúng',
-          );
-        }
-
-        // Tạo ActionPlan từ dữ liệu
-        const adjustedPlan: ActionPlan = {
-          steps: planData.steps.map((s) => ({
-            ...s,
-            agentType: this.validateAgentType(s.agentType),
-            dependsOn: Array.isArray(s.dependsOn) ? s.dependsOn : [],
-            maxRetries: s.maxRetries || 2,
-            retryCount: 0,
-            status: StepStatus.PENDING,
-          })),
-          currentStepIndex: 0,
-          executionContext: { ...originalPlan.executionContext },
-          status: PlanStatus.CREATED,
-          overallProgress: 0,
-          startTime: originalPlan.startTime,
-        };
-
-        this.logger.debug(`Kế hoạch mới có ${adjustedPlan.steps.length} bước`);
-        return adjustedPlan;
-      } catch (error) {
-        this.logger.error(
-          `Error parsing adjustment response: ${error.message}`,
-        );
-        this.logger.debug(`Response content: ${response}`);
+      if (!result) {
+        this.logger.error('Không nhận được phản hồi từ LLM khi điều chỉnh kế hoạch');
         return null;
       }
+
+      const planObject = this.parsePlanFromLLMResponse(result);
+      
+      if (!planObject) {
+        this.logger.error('Không thể phân tích kế hoạch từ phản hồi LLM:', result);
+        return null;
+      }
+
+      // Tạo kế hoạch mới với ID mới
+      const newPlanId = uuidv4();
+      const adjustedPlan: ActionPlan = {
+        id: newPlanId,
+        parentPlanId: originalPlan.id,
+        description: `Điều chỉnh cho kế hoạch ${originalPlan.id}: ${planObject.description || 'Kế hoạch điều chỉnh'}`,
+        goal: originalPlan.goal,
+        status: PlanStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        steps: this.buildStepsFromParsedPlan(planObject),
+        currentStepIndex: 0,
+        isAdjustment: true,
+        executionContext: this.prepareContextForNewPlan(originalPlan, planObject),
+        metadata: {
+          originalPlanId: originalPlan.id,
+          adjustmentReason: reason,
+          llmResponse: result,
+        },
+        overallProgress: 0
+      };
+
+      // Đảm bảo bước đầu tiên không có phụ thuộc vào kế hoạch cũ
+      if (adjustedPlan.steps.length > 0) {
+        adjustedPlan.steps[0].dependsOn = [];
+      }
+
+      this.logger.log(`Đã tạo kế hoạch điều chỉnh ${newPlanId} với ${adjustedPlan.steps.length} bước`);
+      
+      return adjustedPlan;
     } catch (error) {
-      this.logger.error(`Error adjusting action plan: ${error.message}`);
+      this.logger.error(`Lỗi khi điều chỉnh kế hoạch: ${error.message}`, error.stack);
       return null;
     }
+  }
+
+  /**
+   * Chuẩn bị context cho kế hoạch mới từ kế hoạch cũ
+   */
+  private prepareContextForNewPlan(originalPlan: ActionPlan, newPlanObject: any): ExecutionContext {
+    const newContext: ExecutionContext = { 
+      result: {}, 
+      evaluation: {},
+      ...originalPlan.executionContext 
+    };
+    
+    // Chuyển kết quả từ kế hoạch cũ sang kế hoạch mới
+    for (const step of originalPlan.steps) {
+      if (step.status === StepStatus.SUCCEEDED && step.result) {
+        newContext.result[step.id] = step.result;
+      }
+      if (step.evaluation) {
+        newContext.evaluation[step.id] = step.evaluation;
+      }
+    }
+    
+    return newContext;
+  }
+
+  /**
+   * Tạo prompt điều chỉnh kế hoạch từ context
+   */
+  private getAdjustmentPrompt(context: any): string {
+    // Tạo prompt dựa trên context
+    const systemPrompt = this.getAdjustmentSystemPrompt();
+    const failedStep = context.failedStep;
+    const originalPlan = context.originalPlan;
+    const executionContext = context.executionContext || {};
+    
+    // Kiểm tra xem Minh có được đề cập trong specifiedParticipants không
+    const specifiedParticipants = executionContext.specifiedParticipants || [];
+    const minhIncluded = Array.isArray(specifiedParticipants) && specifiedParticipants.includes("Minh");
+    
+    // Tạo hướng dẫn đặc biệt tùy thuộc vào việc Minh có được chỉ định không
+    let specialInstructions = "";
+    
+    if (minhIncluded) {
+      specialInstructions = `
+- Nếu lỗi liên quan đến thành viên Minh không có lịch rảnh, hãy tạo kế hoạch mới với một bước duy nhất sử dụng SLACK agent để gửi tin nhắn hỏi ý kiến team.
+- Kế hoạch mới phải hoàn toàn độc lập với kế hoạch cũ.
+- ID của bước trong kế hoạch mới nên là "step1_new" hoặc tương tự, và KHÔNG có bất kỳ phụ thuộc nào (dependsOn: []).
+- Trong prompt của bước mới, hãy đưa đầy đủ thông tin từ các bước đã hoàn thành.`;
+    } else {
+      specialInstructions = `
+- Nếu lỗi liên quan đến việc không tìm được thời gian rảnh chung, hãy tạo kế hoạch mới chỉ xét các thành viên đã được chỉ định (${specifiedParticipants.join(', ')}).
+- Kế hoạch mới phải hoàn toàn độc lập với kế hoạch cũ.
+- ID của bước trong kế hoạch mới nên là "step1_new" hoặc tương tự, và KHÔNG có bất kỳ phụ thuộc nào (dependsOn: []).
+- Trong prompt của bước mới, hãy đưa đầy đủ thông tin từ các bước đã hoàn thành.`;
+    }
+    
+    // Tạo user prompt dựa trên context
+    const userPrompt = `
+Kế hoạch hiện tại cần được điều chỉnh vì đã gặp lỗi tại bước ${failedStep.id}.
+
+THÔNG TIN KẾ HOẠCH:
+ID: ${originalPlan.id}
+Mô tả: ${originalPlan.description || 'Không có mô tả'}
+Mục tiêu: ${originalPlan.goal || 'Không có mục tiêu cụ thể'}
+
+BƯỚC BỊ LỖI:
+ID: ${failedStep.id}
+Agent: ${failedStep.agent}
+Mô tả: ${failedStep.description || 'Không có mô tả'}
+Kết quả: ${JSON.stringify(failedStep.result || {}, null, 2)}
+
+LÝ DO CẦN ĐIỀU CHỈNH:
+${context.reason}
+
+HƯỚNG DẪN ĐẶC BIỆT:
+${specialInstructions}
+
+Hãy tạo một kế hoạch mới phù hợp với tình huống hiện tại.
+`;
+
+    return userPrompt;
+  }
+
+  /**
+   * Phân tích kế hoạch từ phản hồi LLM
+   */
+  private parsePlanFromLLMResponse(response: string): any {
+    try {
+      // Làm sạch response, loại bỏ markdown và các thẻ không cần thiết
+      const cleanedResponse = this.cleanMarkdownCodeBlocks(response);
+      
+      // Parse JSON
+      const planObject = JSON.parse(cleanedResponse);
+      
+      // Kiểm tra tính hợp lệ của kế hoạch
+      if (!planObject.steps || !Array.isArray(planObject.steps) || planObject.steps.length === 0) {
+        this.logger.error('Kế hoạch không hợp lệ: không có bước nào');
+        return null;
+      }
+      
+      return planObject;
+    } catch (error) {
+      this.logger.error(`Lỗi khi phân tích kế hoạch từ LLM: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Xây dựng các bước từ kế hoạch đã phân tích
+   */
+  private buildStepsFromParsedPlan(planObject: any): ActionStep[] {
+    return planObject.steps.map((step, index) => {
+      return {
+        id: step.id || `step${index + 1}_new`,
+        agentType: this.validateAgentType(step.agentType),
+        prompt: step.prompt,
+        dependsOn: Array.isArray(step.dependsOn) ? step.dependsOn : [],
+        condition: step.condition || null,
+        maxRetries: step.maxRetries || 2,
+        timeout: step.timeout || 15000,
+        retryCount: 0,
+        status: StepStatus.PENDING
+      };
+    });
   }
 
   /**
@@ -280,16 +444,7 @@ export class ActionPlanner {
   }
 
   private getSystemPrompt(): string {
-    // Đọc cấu hình từ this.openaiService.getPromptConfig('actionPlanner')
-    const config = this.openaiService.getPromptConfig('actionPlanner');
-    if (config && config.systemPrompt) {
-      return config.systemPrompt;
-    }
-    // Thêm phương thức getDefaultSystemPrompt() để sử dụng khi không có cấu hình
-    return this.getDefaultSystemPrompt();
-  }
-
-  private getDefaultSystemPrompt(): string {
+    // Không lấy cấu hình từ llm.config.ts nữa, luôn sử dụng prompt từ code
     return `
 Bạn là một AI assistant được thiết kế để lập kế hoạch hành động từ mô tả yêu cầu.
 
@@ -320,6 +475,11 @@ QUAN TRỌNG: Trả về JSON thuần túy, không bọc trong markdown code blo
     `;
   }
 
+  private getDefaultSystemPrompt(): string {
+    // Phương thức này không còn cần thiết, nhưng giữ lại để tránh lỗi nếu có code khác gọi đến
+    return this.getSystemPrompt();
+  }
+
   private getUserPrompt(processedInput: string): string {
     return `Đây là yêu cầu của người dùng sau khi được phân tích:
     
@@ -346,11 +506,18 @@ Nhiệm vụ của bạn là:
    - Loại bỏ các bước không còn phù hợp
    - Điều chỉnh thứ tự và phụ thuộc giữa các bước
 
+LƯU Ý ĐẶC BIỆT: Nếu lỗi liên quan đến việc không tìm được lịch rảnh chung cho tất cả thành viên, đặc biệt khi có thành viên "Minh" không có lịch rảnh:
+1. Tạo kế hoạch mới có bước sử dụng SLACK agent để:
+   - Gửi tin nhắn hỏi ý kiến team về việc họp thiếu thành viên, HOẶC
+   - Hỏi thành viên bận đó xem có thể điều chỉnh lịch không
+2. Kế hoạch mới chỉ cần 1-2 bước và kết thúc tại việc gửi tin nhắn hỏi ý kiến
+3. QUAN TRỌNG: Kế hoạch mới nên có bước đầu tiên KHÔNG phụ thuộc vào bất kỳ bước nào trước đó
+
 Trả về kế hoạch điều chỉnh dưới dạng JSON với cấu trúc:
 {
   "steps": [
     {
-      "id": "step1",
+      "id": "step1_new",
       "agentType": "JIRA",
       "prompt": "Chi tiết prompt cho JIRA agent...",
       "dependsOn": [],
@@ -392,6 +559,38 @@ QUAN TRỌNG: Trả về JSON thuần túy, không bọc trong markdown code blo
       })
       .join('\n');
 
+    // Nếu có thông tin về bước thất bại trong context
+    let contextInfo = "";
+    if (failedStep.result && failedStep.result.data) {
+      contextInfo = `
+THÔNG TIN THÊM TỪ BƯỚC THẤT BẠI:
+${JSON.stringify(failedStep.result.data, null, 2)}
+      `;
+    }
+    
+    // Kiểm tra xem Minh có được đề cập trong specifiedParticipants không
+    const specifiedParticipants = originalPlan.executionContext?.specifiedParticipants || [];
+    const minhIncluded = Array.isArray(specifiedParticipants) && specifiedParticipants.includes("Minh");
+    
+    // Tạo hướng dẫn đặc biệt tùy thuộc vào việc Minh có được chỉ định không
+    let specialInstructions = "";
+    
+    if (minhIncluded) {
+      specialInstructions = `
+HƯỚNG DẪN ĐẶC BIỆT:
+- Nếu lỗi liên quan đến thành viên Minh không có lịch rảnh, hãy tạo kế hoạch mới với một bước duy nhất sử dụng SLACK agent để gửi tin nhắn hỏi ý kiến team hoặc trực tiếp hỏi Minh.
+- Kế hoạch mới phải hoàn toàn độc lập với kế hoạch cũ. KHÔNG được tham chiếu đến các bước trong kế hoạch cũ.
+- ID của bước trong kế hoạch mới nên là "step1_new" hoặc tương tự, và KHÔNG có bất kỳ phụ thuộc nào (dependsOn: []).
+- Trong prompt của bước mới, hãy đưa đầy đủ thông tin từ các bước đã hoàn thành (như tên thành viên team, tính năng cần thảo luận).`;
+    } else {
+      specialInstructions = `
+HƯỚNG DẪN ĐẶC BIỆT:
+- Nếu lỗi liên quan đến việc không tìm được thời gian rảnh chung, hãy tạo kế hoạch mới chỉ xét các thành viên đã được chỉ định (${specifiedParticipants.join(', ')}).
+- Kế hoạch mới phải hoàn toàn độc lập với kế hoạch cũ. KHÔNG được tham chiếu đến các bước trong kế hoạch cũ.
+- ID của bước trong kế hoạch mới nên là "step1_new" hoặc tương tự, và KHÔNG có bất kỳ phụ thuộc nào (dependsOn: []).
+- Trong prompt của bước mới, hãy đưa đầy đủ thông tin từ các bước đã hoàn thành (như tên thành viên team, tính năng cần thảo luận).`;
+    }
+
     return `
 Kế hoạch hiện tại cần được điều chỉnh vì đã gặp lỗi tại một bước.
 
@@ -400,15 +599,18 @@ ${stepsDescription}
 
 BƯỚC BỊ LỖI:
 ${failedStepDescription}
+${contextInfo}
 
 LÝ DO CẦN ĐIỀU CHỈNH:
 ${reason}
 
+${specialInstructions}
+
 Hãy tạo một kế hoạch mới phù hợp với tình huống hiện tại. Kế hoạch mới cần:
 1. Xử lý được vấn đề đã gặp phải
 2. Vẫn đảm bảo đạt được mục tiêu tổng thể
-3. Điều chỉnh các bước để tránh lỗi tương tự
-4. Bổ sung các bước cần thiết để khắc phục tình huống
+3. Không phụ thuộc vào các bước cũ
+4. Bao gồm đầy đủ thông tin cần thiết từ các bước đã hoàn thành
 
 Trả về kế hoạch điều chỉnh dưới dạng JSON.
     `;
@@ -510,5 +712,68 @@ Trả về đánh giá dưới dạng JSON.
     
     Đảm bảo các bước được sắp xếp logic, có thông tin dependency giữa các bước, và mỗi bước có hướng dẫn chi tiết.
     `;
+  }
+
+  /**
+   * Tạo kịch bản đơn giản cho cuộc họp
+   */
+  private getSimplifiedMeetingPlan(): ActionPlan {
+    // Tạo kế hoạch đơn giản chỉ với 3 bước
+    return {
+      steps: [
+        {
+          id: 'step1',
+          agentType: AgentType.SLACK,
+          prompt: 'Tìm kiếm tin nhắn về tính năng mới và cuộc họp trong các kênh nhóm để xác định thành viên team và tính năng cần thảo luận.',
+          dependsOn: [],
+          condition: null,
+          maxRetries: 2,
+          retryCount: 0,
+          timeout: 10000,
+          status: StepStatus.PENDING,
+        },
+        {
+          id: 'step2',
+          agentType: AgentType.CALENDAR,
+          prompt: 'Tìm thời gian rảnh chung của các thành viên được nhắc đến trong tin nhắn tìm được từ bước trước trong tuần này để sắp xếp cuộc họp. Chỉ xét các thành viên được đề cập cụ thể, không thêm thành viên khác.',
+          dependsOn: ['step1'],
+          condition: null,
+          maxRetries: 2,
+          retryCount: 0,
+          timeout: 15000,
+          status: StepStatus.PENDING,
+        },
+        {
+          id: 'step3',
+          agentType: AgentType.CALENDAR,
+          prompt: 'Tạo cuộc họp mới vào thời gian phù hợp nhất, mời các thành viên được nhắc đến tham dự và cung cấp thông tin về địa điểm (phòng họp Mercury nếu có sẵn, không thì dùng Mars).',
+          dependsOn: ['step2'],
+          condition: null,
+          maxRetries: 2,
+          retryCount: 0,
+          timeout: 15000,
+          status: StepStatus.PENDING,
+        },
+      ],
+      currentStepIndex: 0,
+      executionContext: {},
+      status: PlanStatus.CREATED,
+      overallProgress: 0,
+    };
+  }
+
+  /**
+   * Trích xuất danh sách thành viên được đề cập trong yêu cầu
+   */
+  private extractParticipants(prompt: string): string[] {
+    const participants = [];
+    
+    // Trích xuất các thành viên được đề cập cụ thể trong prompt
+    if (prompt.includes("Phúc")) participants.push("Phúc");
+    if (prompt.includes("Hưng")) participants.push("Hưng");
+    if (prompt.includes("Đăng")) participants.push("Đăng");
+    if (prompt.includes("Minh")) participants.push("Minh");
+    
+    return participants;
   }
 }

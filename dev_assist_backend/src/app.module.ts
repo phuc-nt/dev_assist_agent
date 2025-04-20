@@ -11,6 +11,10 @@ import { ActionPlanEntity } from './central-agent/entities/action-plan.entity';
 import { LLMUsageRecord } from './entity/LLMUsageRecord';
 import { CostMonitoringModule } from './cost-monitoring/cost-monitoring.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { MockJiraAgent } from './central-agent/agents/mock-jira-agent';
+import { MockSlackAgent } from './central-agent/agents/mock-slack-agent';
+import { MockConfluenceAgent } from './central-agent/agents/mock-confluence-agent';
+import { MockCalendarAgent } from './central-agent/agents/mock-calendar-agent';
 
 @Module({
   imports: [
@@ -30,6 +34,17 @@ import { ScheduleModule } from '@nestjs/schedule';
     SlackModule,
     CentralAgentModule,
     CostMonitoringModule,
+  ],
+  controllers: [
+    // ... existing code ...
+  ],
+  providers: [
+    // ... existing code ...
+    MockJiraAgent,
+    MockSlackAgent,
+    MockConfluenceAgent,
+    MockCalendarAgent,
+    // ... existing code ...
   ],
 })
 export class AppModule {}

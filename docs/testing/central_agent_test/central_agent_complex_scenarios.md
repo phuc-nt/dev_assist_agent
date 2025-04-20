@@ -15,9 +15,9 @@ Các kịch bản kiểm thử trong tài liệu này tập trung vào:
 
 ## 1. Kịch bản kiểm thử phức tạp
 
-### 1.1 Cập nhật trạng thái task khi hoàn thành công việc
+### 1.1 Kết thúc ngày làm việc
 
-**Mô tả**: Người dùng báo cáo đã hoàn thành công việc hôm nay và muốn cập nhật tất cả các task liên quan sang trạng thái Done. Hệ thống cần tự động tìm các task đang làm, cập nhật trạng thái và thông báo cho team.
+**Mô tả**: Người dùng thông báo kết thúc ngày làm việc và muốn hệ thống tự động xử lý các tác vụ liên quan như cập nhật trạng thái công việc, tạo báo cáo ngày và thông báo cho team. Hệ thống cần tự động tìm các task đang làm, cập nhật trạng thái và thực hiện các hành động kết thúc ngày.
 
 **Endpoint**: `POST /central-agent/process`
 
@@ -48,7 +48,7 @@ curl -X POST "http://localhost:3001/central-agent/process" \
 
 **Luồng thực thi**:
 1. Central Agent nhận yêu cầu "tôi xong việc hôm nay rồi" từ người dùng
-2. InputProcessor phân tích yêu cầu và xác định ý định cập nhật trạng thái task
+2. InputProcessor phân tích yêu cầu và xác định ý định kết thúc ngày làm việc
 3. ActionPlanner tạo kế hoạch 5 bước:
    - Tìm các task đang thực hiện (JIRA)
    - Tìm các thảo luận liên quan (SLACK)
@@ -65,9 +65,169 @@ curl -X POST "http://localhost:3001/central-agent/process" \
 - Tạo báo cáo ngày trên Confluence
 - Trả về thông báo tổng hợp cho người dùng
 
+**Sơ đồ luồng xử lý**:
+
+```mermaid
+sequenceDiagram
+    User->>InputProcessor: "tôi xong việc hôm nay rồi"
+    InputProcessor->>ActionPlanner: Phân tích ý định kết thúc ngày làm việc
+    ActionPlanner->>ActionPlanner: Tạo kế hoạch 5 bước
+    ActionPlanner->>AgentCoordinator: Gửi kế hoạch để thực thi
+    AgentCoordinator->>JiraAgent: Bước 1: Tìm task đang thực hiện
+    JiraAgent-->>AgentCoordinator: Trả về 3 task (XDEMO2-1, XDEMO2-2, XDEMO2-3)
+    AgentCoordinator->>SlackAgent: Bước 2: Tìm thảo luận liên quan
+    SlackAgent-->>AgentCoordinator: Trả về các tin nhắn về task
+    AgentCoordinator->>JiraAgent: Bước 3: Cập nhật trạng thái task sang Done
+    JiraAgent-->>AgentCoordinator: Xác nhận cập nhật thành công
+    AgentCoordinator->>SlackAgent: Bước 4: Gửi thông báo về việc hoàn thành
+    SlackAgent-->>AgentCoordinator: Xác nhận đã gửi thông báo
+    AgentCoordinator->>ConfluenceAgent: Bước 5: Cập nhật báo cáo ngày
+    ConfluenceAgent-->>AgentCoordinator: Xác nhận đã cập nhật báo cáo
+    AgentCoordinator->>ResultSynthesizer: Chuyển kết quả để tổng hợp
+    ResultSynthesizer->>User: Trả về thông báo tổng hợp kết quả
+```
+
 ### 1.2 Sắp xếp lịch họp dựa trên thời gian rảnh của nhóm
 
-**Mô tả**: Người dùng muốn sắp xếp một cuộc họp nhóm trong tuần này dựa trên thời gian rảnh của tất cả thành viên trong nhóm. Hệ thống cần tìm khung giờ thích hợp và tạo lịch họp.
+**Mô tả**: Người dùng muốn sắp xếp một cuộc họp nhóm trong tuần này dựa trên thời gian rảnh. Hệ thống cần tìm khung giờ thích hợp, kiểm tra phòng trống và tạo lịch họp. Kịch bản này được chia thành các trường hợp con để đánh giá khả năng xử lý các tình huống khác nhau.
+
+#### 1.2.1 Sắp xếp cuộc họp với các thành viên cụ thể
+
+**Mô tả**: Người dùng chỉ định rõ danh sách thành viên cần tham gia cuộc họp. Hệ thống cần tôn trọng danh sách này và chỉ tìm khung giờ cho đúng những người được chỉ định.
+
+**Endpoint**: `POST /central-agent/process`
+
+**Curl Command**:
+```bash
+curl -X POST "http://localhost:3001/central-agent/process" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "sắp xếp cuộc họp với Phúc, Đăng và Hưng để kickoff dự án X", 
+    "userId": "user123"
+  }' | jq
+```
+
+**Luồng thực thi**:
+1. Central Agent xác định rõ các thành viên được chỉ định (Phúc, Đăng, Hưng)
+2. Xác định khung giờ phù hợp cho chính xác những thành viên này qua CalendarAgent
+3. Tạo cuộc họp mới trong lịch và chỉ mời đúng những thành viên đã chỉ định
+4. Đặt phòng họp và gửi thông báo về cuộc họp
+
+**Kỳ vọng**:
+- Hệ thống nhận diện đúng các thành viên được chỉ định (Phúc, Đăng, Hưng)
+- Không bao gồm thành viên khác (như Minh) trong quá trình tìm kiếm lịch trống
+- Tạo thành công cuộc họp với đúng các thành viên được chỉ định
+- Trả về xác nhận với thông tin chi tiết về cuộc họp đã tạo
+
+**Sơ đồ luồng xử lý**:
+
+```mermaid
+sequenceDiagram
+    User->>ActionPlanner: Sắp xếp cuộc họp với Phúc, Đăng và Hưng
+    ActionPlanner->>ActionPlanner: Trích xuất danh sách thành viên
+    Note over ActionPlanner: specifiedParticipants = ["Phúc", "Đăng", "Hưng"]
+    ActionPlanner->>AgentCoordinator: Tạo kế hoạch 3 bước
+    AgentCoordinator->>SlackAgent: Tìm thông tin về tính năng và thành viên
+    SlackAgent-->>AgentCoordinator: Trả về tin nhắn đề cập @Phúc @Hưng @Đăng
+    AgentCoordinator->>CalendarAgent: Tìm thời gian rảnh cho các thành viên chỉ định
+    Note over CalendarAgent: Chỉ xét lịch trống cho Phúc, Hưng, Đăng
+    CalendarAgent-->>AgentCoordinator: Trả về 4 khung giờ phù hợp
+    AgentCoordinator->>CalendarAgent: Tạo cuộc họp với khung giờ đầu tiên
+    CalendarAgent-->>AgentCoordinator: Xác nhận đã tạo cuộc họp
+    AgentCoordinator-->>User: Báo cáo đã tạo cuộc họp thành công
+```
+
+#### 1.2.2 Sắp xếp cuộc họp với toàn bộ team
+
+**Mô tả**: Người dùng yêu cầu sắp xếp cuộc họp với "cả team" mà không chỉ định cụ thể thành viên. Hệ thống phải xác định tất cả thành viên của team và xử lý trường hợp không tìm được thời gian phù hợp cho tất cả.
+
+**Endpoint**: `POST /central-agent/process`
+
+**Curl Command**:
+```bash
+curl -X POST "http://localhost:3001/central-agent/process" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "sắp xếp cuộc họp với cả team để kickoff dự án X", 
+    "userId": "user123"
+  }' | jq
+```
+
+**Luồng thực thi**:
+1. Central Agent xác định tất cả thành viên trong team dự án (thông qua Slack)
+2. Tìm kiếm khung giờ phù hợp cho tất cả thành viên qua CalendarAgent
+3. Phát hiện Minh không có lịch rảnh trong tuần này
+4. Điều chỉnh kế hoạch để xử lý tình huống này
+5. Gửi tin nhắn hỏi ý kiến team về việc họp thiếu Minh, tìm thời gian khác, hoặc hỏi Minh điều chỉnh lịch
+
+**Kỳ vọng**:
+- Hệ thống nhận diện tất cả thành viên trong team bao gồm Minh
+- Phát hiện và xử lý trường hợp Minh không có lịch rảnh
+- Điều chỉnh kế hoạch thay vì dừng hẳn quy trình
+- Gửi tin nhắn Slack với các lựa chọn phù hợp để tiếp tục quy trình
+
+**Sơ đồ luồng xử lý**:
+
+```mermaid
+sequenceDiagram
+    User->>ActionPlanner: Sắp xếp cuộc họp với cả team
+    ActionPlanner->>ActionPlanner: Không có thành viên cụ thể được chỉ định
+    ActionPlanner->>AgentCoordinator: Tạo kế hoạch 3 bước
+    AgentCoordinator->>SlackAgent: Tìm thông tin về tính năng và thành viên
+    SlackAgent-->>AgentCoordinator: Trả về tin nhắn đề cập @Phúc @Hưng @Đăng @Minh
+    AgentCoordinator->>CalendarAgent: Tìm thời gian rảnh cho tất cả thành viên
+    Note over CalendarAgent: Xét lịch trống cho Phúc, Hưng, Đăng, Minh
+    CalendarAgent-->>AgentCoordinator: Báo lỗi - Minh không có lịch rảnh
+    AgentCoordinator->>ActionPlanner: Yêu cầu điều chỉnh kế hoạch
+    ActionPlanner->>ActionPlanner: Xác định vấn đề với lịch của Minh
+    ActionPlanner-->>AgentCoordinator: Tạo kế hoạch mới với 1 bước
+    AgentCoordinator->>SlackAgent: Gửi tin nhắn hỏi ý kiến team
+    Note over SlackAgent: Cung cấp 3 lựa chọn: <br/> 1. Họp không có Minh <br/> 2. Tìm thời gian khác <br/> 3. Hỏi Minh điều chỉnh lịch
+    SlackAgent-->>AgentCoordinator: Xác nhận đã gửi tin nhắn
+    AgentCoordinator-->>User: Báo cáo kết quả và đề xuất hướng giải quyết
+```
+
+**So sánh cơ chế phán đoán của Action Planner**:
+
+```mermaid
+flowchart TD
+    A[Yêu cầu sắp xếp cuộc họp] --> B{Có chỉ định<br/>thành viên cụ thể?}
+    B -->|Có| C[Trích xuất danh sách<br/>thành viên được chỉ định]
+    B -->|Không| D[Mặc định tất cả<br/>thành viên team]
+    
+    C --> E[Đặt specifiedParticipants<br/>vào executionContext]
+    D --> E
+    
+    E --> F[Tạo kế hoạch<br/>3 bước cơ bản]
+    
+    F --> G[Thực thi kế hoạch]
+    
+    G --> H{Tìm thấy thời gian<br/>cho tất cả thành viên?}
+    
+    H -->|Có| I[Tạo cuộc họp<br/>Kế hoạch thành công]
+    
+    H -->|Không| J{Minh có trong<br/>danh sách không?}
+    
+    J -->|Có| K[Điều chỉnh kế hoạch:<br/>Gửi tin nhắn hỏi ý kiến team]
+    J -->|Không| L[Vấn đề khác:<br/>Tùy thuộc tình huống]
+    
+    K --> M[Kế hoạch mới<br/>với một bước duy nhất]
+    L --> N[Tùy chỉnh kế hoạch<br/>theo tình huống]
+```
+
+Sự khác biệt trong cách Central Agent xử lý hai kịch bản sắp xếp cuộc họp:
+
+1. **Trích xuất thành viên**: Với kịch bản 1.2.1, hệ thống trích xuất cụ thể danh sách thành viên từ yêu cầu. Với kịch bản 1.2.2, hệ thống phải tìm kiếm thông tin về team từ Slack.
+
+2. **Xử lý lỗi**: Kịch bản 1.2.1 thành công vì tất cả thành viên được chỉ định có lịch rảnh. Kịch bản 1.2.2 cần điều chỉnh kế hoạch khi phát hiện Minh không có lịch rảnh.
+
+3. **Điều chỉnh kế hoạch**: Cơ chế điều chỉnh kế hoạch cho phép hệ thống chuyển từ kế hoạch ban đầu (tạo cuộc họp) sang kế hoạch thay thế (gửi tin nhắn hỏi ý kiến) khi gặp trường hợp ngoại lệ.
+
+4. **Thông minh ngữ cảnh**: Hệ thống hiểu được mối quan hệ giữa các thành viên và quyết định đưa ra các lựa chọn phù hợp (họp thiếu người, đổi lịch, hoặc liên hệ trực tiếp).
+
+#### 1.2.3 Sắp xếp cuộc họp với team phát triển
+
+**Mô tả**: Người dùng muốn sắp xếp cuộc họp với "team phát triển" - một nhóm chung chung không được chỉ định cụ thể. Hệ thống cần tìm thông tin về team phát triển rồi mới tiến hành tìm thời gian và tạo lịch họp.
 
 **Endpoint**: `POST /central-agent/process`
 
@@ -82,34 +242,49 @@ curl -X POST "http://localhost:3001/central-agent/process" \
 ```
 
 **Cấu hình Mock Sub-Agents**:
-- **MockCalendarAgent**: 
-  - Trả về lịch bận/rảnh của các thành viên trong team
-  - Hỗ trợ tạo sự kiện lịch mới
-  
-- **MockUserDirectoryAgent**: 
-  - Cung cấp thông tin về nhóm phát triển và thành viên
-  
 - **MockSlackAgent**: 
-  - Gửi thông báo về cuộc họp
-  - Tạo kênh thảo luận cho cuộc họp
+  - Tìm kiếm thông tin về "team phát triển" trong workspace
+  - Xác định danh sách thành viên của team
+  
+- **MockCalendarAgent**: 
+  - Trả về lịch trống cho các thành viên trong team phát triển
+  - Hỗ trợ tạo sự kiện lịch mới và đặt phòng họp
 
 **Luồng thực thi**:
-1. Xác định các thành viên trong team phát triển
-2. Tìm kiếm lịch trống chung trong tuần hiện tại
-3. Chọn thời gian phù hợp nhất
-4. Tạo cuộc họp mới trong lịch
-5. Gửi thông báo cho tất cả thành viên
-6. Tạo kênh Slack để chuẩn bị cho cuộc họp
+1. Central Agent xác định cần tìm hiểu về "team phát triển" trước tiên
+2. Tìm thông tin về team phát triển và thành viên qua SlackAgent
+3. Xác định khung giờ phù hợp cho các thành viên qua CalendarAgent
+4. Tạo cuộc họp mới và mời các thành viên qua CalendarAgent
+5. Gửi thông báo về cuộc họp qua SlackAgent
 
 **Kỳ vọng**:
-- Tìm được khung giờ phù hợp cho tất cả thành viên
-- Tạo thành công cuộc họp trong lịch với đầy đủ thông tin
-- Thông báo cho tất cả thành viên qua Slack
-- Trả về xác nhận với thông tin chi tiết về cuộc họp
+- Hệ thống xác định đúng thành viên của team phát triển
+- Tìm được khung giờ phù hợp cho các thành viên
+- Tạo thành công cuộc họp và đặt phòng họp
+- Thông báo đầy đủ về cuộc họp cho các thành viên
+
+**Sơ đồ luồng xử lý**:
+
+```mermaid
+sequenceDiagram
+    User->>ActionPlanner: Sắp xếp cuộc họp với team phát triển
+    ActionPlanner->>ActionPlanner: Xác định cần tìm thông tin về team phát triển
+    ActionPlanner->>AgentCoordinator: Tạo kế hoạch 4 bước
+    AgentCoordinator->>SlackAgent: Bước 1: Tìm thông tin về team phát triển
+    SlackAgent-->>AgentCoordinator: Trả về danh sách thành viên team phát triển
+    Note over AgentCoordinator: devTeamMembers = ["Phúc", "Hưng", "Minh", "Tuấn"]
+    AgentCoordinator->>CalendarAgent: Bước 2: Tìm thời gian rảnh cho team phát triển
+    CalendarAgent-->>AgentCoordinator: Trả về các khung giờ phù hợp
+    AgentCoordinator->>CalendarAgent: Bước 3: Tạo cuộc họp và đặt phòng
+    CalendarAgent-->>AgentCoordinator: Xác nhận đã tạo cuộc họp
+    AgentCoordinator->>SlackAgent: Bước 4: Thông báo về cuộc họp
+    SlackAgent-->>AgentCoordinator: Xác nhận đã gửi thông báo
+    AgentCoordinator-->>User: Báo cáo đã sắp xếp cuộc họp thành công
+```
 
 ### 1.3 Báo cáo tiến độ dự án và phân tích vấn đề
 
-**Mô tả**: Người dùng yêu cầu hệ thống tạo báo cáo tiến độ dự án hiện tại, phân tích các vấn đề đang gặp phải và đề xuất giải pháp.
+**Mô tả**: Người dùng yêu cầu hệ thống tạo báo cáo tiến độ dự án, phân tích các vấn đề đang gặp phải và đề xuất giải pháp. Kịch bản này kiểm tra khả năng tổng hợp thông tin từ nhiều nguồn và phân tích dữ liệu phức tạp.
 
 **Endpoint**: `POST /central-agent/process`
 
@@ -125,34 +300,53 @@ curl -X POST "http://localhost:3001/central-agent/process" \
 
 **Cấu hình Mock Sub-Agents**:
 - **MockJiraAgent**: 
-  - Cung cấp danh sách task theo dự án với trạng thái và mức ưu tiên
-  - Trả về thông tin về bugs và issues
+  - Cung cấp danh sách task theo dự án XDEMO với trạng thái và mức ưu tiên
+  - Trả về các bugs và issues đang mở
   
 - **MockConfluenceAgent**: 
-  - Tìm kiếm các báo cáo trước đó
-  - Tạo trang báo cáo mới
+  - Tìm kiếm báo cáo trước đó của dự án XDEMO
+  - Tạo trang báo cáo mới với phân tích
   
-- **MockAnalyticsAgent**: 
-  - Phân tích xu hướng và thống kê dự án
-  - Cung cấp biểu đồ tiến độ
+- **MockSlackAgent**: 
+  - Tìm kiếm thảo luận gần đây về vấn đề của dự án XDEMO
 
 **Luồng thực thi**:
-1. Thu thập thông tin dự án từ JIRA
-2. Phân tích trạng thái các task và vấn đề
-3. Tìm các báo cáo trước đó để so sánh
-4. Tạo phân tích xu hướng
-5. Tổng hợp báo cáo trên Confluence
-6. Đề xuất giải pháp cho các vấn đề
+1. Central Agent xác định yêu cầu tạo báo cáo tiến độ cho dự án XDEMO
+2. Thu thập dữ liệu từ các nguồn: JIRA, Confluence, Slack
+3. Phân tích dữ liệu và xác định vấn đề
+4. Tạo báo cáo chi tiết trên Confluence
+5. Thông báo về báo cáo mới trên Slack
 
 **Kỳ vọng**:
-- Báo cáo đầy đủ về tiến độ dự án (tỷ lệ hoàn thành, công việc còn lại)
-- Xác định chính xác các vấn đề đang gặp phải
-- Phân tích xu hướng dựa trên dữ liệu lịch sử
+- Hệ thống thu thập đầy đủ dữ liệu từ các nguồn
+- Phân tích chính xác tiến độ và vấn đề dự án
+- Tạo báo cáo có cấu trúc rõ ràng với số liệu chính xác
 - Đề xuất giải pháp khả thi cho các vấn đề
+
+**Sơ đồ luồng xử lý**:
+
+```mermaid
+sequenceDiagram
+    User->>ActionPlanner: Tạo báo cáo tiến độ dự án XDEMO
+    ActionPlanner->>ActionPlanner: Xác định cần thu thập và phân tích dữ liệu
+    ActionPlanner->>AgentCoordinator: Tạo kế hoạch 5 bước
+    AgentCoordinator->>JiraAgent: Bước 1: Thu thập dữ liệu task từ dự án XDEMO
+    JiraAgent-->>AgentCoordinator: Trả về 15 tasks và 5 bugs
+    AgentCoordinator->>ConfluenceAgent: Bước 2: Tìm báo cáo trước đó
+    ConfluenceAgent-->>AgentCoordinator: Trả về báo cáo tuần trước
+    AgentCoordinator->>SlackAgent: Bước 3: Tìm thảo luận về vấn đề dự án
+    SlackAgent-->>AgentCoordinator: Trả về 10 tin nhắn thảo luận gần đây
+    AgentCoordinator->>ConfluenceAgent: Bước 4: Tạo báo cáo mới với phân tích
+    Note over AgentCoordinator: Tạo báo cáo với các phần:<br/>1. Tổng quan tiến độ<br/>2. Phân tích vấn đề<br/>3. Đề xuất giải pháp
+    ConfluenceAgent-->>AgentCoordinator: Xác nhận đã tạo báo cáo
+    AgentCoordinator->>SlackAgent: Bước 5: Thông báo về báo cáo mới
+    SlackAgent-->>AgentCoordinator: Xác nhận đã gửi thông báo
+    AgentCoordinator-->>User: Báo cáo đã tạo xong báo cáo tiến độ
+```
 
 ### 1.4 Rà soát và cập nhật tài liệu dự án
 
-**Mô tả**: Người dùng yêu cầu hệ thống rà soát tất cả tài liệu hiện có của dự án, xác định những tài liệu cần cập nhật và tạo kế hoạch cập nhật.
+**Mô tả**: Người dùng yêu cầu hệ thống rà soát tài liệu dự án, xác định những tài liệu cần cập nhật và tạo kế hoạch cập nhật. Kịch bản này kiểm tra khả năng kiểm duyệt tài liệu và lập kế hoạch cập nhật.
 
 **Endpoint**: `POST /central-agent/process`
 
@@ -168,33 +362,52 @@ curl -X POST "http://localhost:3001/central-agent/process" \
 
 **Cấu hình Mock Sub-Agents**:
 - **MockConfluenceAgent**: 
-  - Cung cấp danh sách tài liệu hiện có
-  - Kiểm tra ngày cập nhật gần nhất
+  - Cung cấp danh sách tài liệu XDEMO hiện có với ngày cập nhật
+  - Hỗ trợ cập nhật và tạo mới tài liệu
   
 - **MockJiraAgent**: 
-  - Cung cấp thông tin về các thay đổi gần đây trong dự án
-  - Xác định tính năng mới cần được tài liệu hóa
+  - Cung cấp thông tin về các thay đổi gần đây trong dự án XDEMO
   
-- **MockGitAgent**: 
-  - Cung cấp thông tin về các commit và pull request
+- **MockSlackAgent**: 
+  - Tìm kiếm thảo luận về cập nhật tài liệu
 
 **Luồng thực thi**:
-1. Tìm kiếm tất cả tài liệu dự án trên Confluence
-2. Kiểm tra ngày cập nhật gần nhất của từng tài liệu
-3. Thu thập thông tin về thay đổi gần đây từ JIRA và Git
-4. Xác định tài liệu cần cập nhật
-5. Tạo danh sách công việc cập nhật tài liệu
-6. Gán nhiệm vụ cập nhật cho các thành viên liên quan
+1. Central Agent xác định yêu cầu rà soát tài liệu dự án XDEMO
+2. Thu thập danh sách tài liệu hiện có từ Confluence
+3. Kiểm tra thay đổi gần đây trong dự án từ JIRA
+4. Xác định tài liệu cần cập nhật dựa trên thời gian và thay đổi
+5. Tạo kế hoạch cập nhật tài liệu
+6. Thông báo kế hoạch qua Slack
 
 **Kỳ vọng**:
-- Xác định chính xác tài liệu cần cập nhật
-- Tạo danh sách công việc cụ thể
-- Phân công nhiệm vụ cập nhật hợp lý
-- Báo cáo tổng quan về tình trạng tài liệu dự án
+- Hệ thống xác định chính xác tài liệu cần cập nhật
+- Tạo kế hoạch cập nhật chi tiết với mức độ ưu tiên
+- Thông báo kế hoạch đến team qua Slack
 
-### 1.5 Phân tích và xử lý phản hồi của khách hàng
+**Sơ đồ luồng xử lý**:
 
-**Mô tả**: Người dùng yêu cầu hệ thống thu thập và phân tích phản hồi từ khách hàng, tạo các task cải thiện dựa trên phản hồi.
+```mermaid
+sequenceDiagram
+    User->>ActionPlanner: Rà soát tài liệu dự án XDEMO
+    ActionPlanner->>ActionPlanner: Xác định cần thu thập thông tin tài liệu và thay đổi
+    ActionPlanner->>AgentCoordinator: Tạo kế hoạch 5 bước
+    AgentCoordinator->>ConfluenceAgent: Bước 1: Lấy danh sách tài liệu dự án XDEMO
+    ConfluenceAgent-->>AgentCoordinator: Trả về 12 tài liệu với ngày cập nhật
+    AgentCoordinator->>JiraAgent: Bước 2: Lấy thông tin thay đổi gần đây
+    JiraAgent-->>AgentCoordinator: Trả về các thay đổi trong 2 tuần qua
+    AgentCoordinator->>SlackAgent: Bước 3: Tìm thảo luận về cập nhật tài liệu
+    SlackAgent-->>AgentCoordinator: Trả về các tin nhắn thảo luận liên quan
+    AgentCoordinator->>ConfluenceAgent: Bước 4: Tạo kế hoạch cập nhật tài liệu
+    Note over AgentCoordinator: Xác định 5 tài liệu cần cập nhật:<br/>1. API Documentation<br/>2. User Guide<br/>3. System Architecture<br/>4. Deployment Guide<br/>5. Testing Strategy
+    ConfluenceAgent-->>AgentCoordinator: Xác nhận đã tạo kế hoạch
+    AgentCoordinator->>SlackAgent: Bước 5: Thông báo kế hoạch cập nhật
+    SlackAgent-->>AgentCoordinator: Xác nhận đã gửi thông báo
+    AgentCoordinator-->>User: Báo cáo kết quả rà soát và kế hoạch cập nhật
+```
+
+### 1.5 Phân tích phản hồi khách hàng về tính năng đăng nhập
+
+**Mô tả**: Người dùng yêu cầu hệ thống phân tích phản hồi từ khách hàng về tính năng đăng nhập và tạo task cải thiện. Kịch bản này kiểm tra khả năng phân tích dữ liệu phi cấu trúc và chuyển đổi thành hành động cụ thể.
 
 **Endpoint**: `POST /central-agent/process`
 
@@ -209,31 +422,51 @@ curl -X POST "http://localhost:3001/central-agent/process" \
 ```
 
 **Cấu hình Mock Sub-Agents**:
-- **MockSurveyAgent**: 
-  - Cung cấp dữ liệu phản hồi khách hàng
-  - Phân loại phản hồi theo chủ đề
+- **MockSlackAgent**: 
+  - Cung cấp tin nhắn phản hồi từ khách hàng trong kênh #customer-feedback
+  - Cấu hình mẫu phản hồi về vấn đề đăng nhập trên iOS
   
 - **MockJiraAgent**: 
-  - Tạo task mới dựa trên phản hồi
-  - Liên kết task với yêu cầu khách hàng
+  - Hỗ trợ tạo task cải thiện với mức độ ưu tiên
+  - Liên kết task với phản hồi khách hàng
   
-- **MockSlackAgent**: 
-  - Thông báo cho team về phản hồi quan trọng
-  - Tạo kênh thảo luận cho cải thiện
+- **MockConfluenceAgent**: 
+  - Hỗ trợ tạo báo cáo phân tích phản hồi khách hàng
 
 **Luồng thực thi**:
-1. Thu thập dữ liệu phản hồi từ khách hàng
-2. Phân loại và phân tích phản hồi theo chủ đề
-3. Xác định các vấn đề cần ưu tiên xử lý
-4. Tạo các task cải thiện trong JIRA
-5. Thông báo cho team về kế hoạch cải thiện
-6. Tạo báo cáo tổng hợp phản hồi khách hàng
+1. Central Agent xác định yêu cầu phân tích phản hồi về tính năng đăng nhập
+2. Thu thập phản hồi khách hàng từ kênh Slack
+3. Phân tích và phân loại phản hồi theo mức độ nghiêm trọng
+4. Tạo báo cáo phân tích trên Confluence
+5. Tạo các task cải thiện trên JIRA
+6. Thông báo kết quả qua Slack
 
 **Kỳ vọng**:
-- Phân tích chính xác các xu hướng trong phản hồi khách hàng
-- Tạo được các task cải thiện với độ ưu tiên hợp lý
-- Thông báo cho các bên liên quan
-- Trả về báo cáo tổng quan về tình hình phản hồi
+- Hệ thống thu thập đầy đủ phản hồi về tính năng đăng nhập
+- Phân loại chính xác các vấn đề theo mức độ ưu tiên
+- Tạo các task cải thiện hợp lý trong JIRA
+- Tạo báo cáo phân tích chi tiết
+
+**Sơ đồ luồng xử lý**:
+
+```mermaid
+sequenceDiagram
+    User->>ActionPlanner: Phân tích phản hồi về tính năng đăng nhập
+    ActionPlanner->>ActionPlanner: Xác định cần thu thập và phân tích phản hồi
+    ActionPlanner->>AgentCoordinator: Tạo kế hoạch 5 bước
+    AgentCoordinator->>SlackAgent: Bước 1: Thu thập phản hồi từ #customer-feedback
+    SlackAgent-->>AgentCoordinator: Trả về 15 tin nhắn phản hồi về đăng nhập
+    AgentCoordinator->>AgentCoordinator: Bước 2: Phân tích và phân loại phản hồi
+    Note over AgentCoordinator: Phân loại theo mức độ ưu tiên:<br/>- Cao: Lỗi đăng nhập trên iOS<br/>- Trung bình: Phiên đăng nhập ngắn<br/>- Thấp: UI không trực quan
+    AgentCoordinator->>ConfluenceAgent: Bước 3: Tạo báo cáo phân tích
+    ConfluenceAgent-->>AgentCoordinator: Xác nhận đã tạo báo cáo
+    AgentCoordinator->>JiraAgent: Bước 4: Tạo các task cải thiện
+    Note over AgentCoordinator: Tạo 3 task trong JIRA:<br/>1. XDEMO-101: Sửa lỗi đăng nhập iOS<br/>2. XDEMO-102: Tăng thời gian phiên<br/>3. XDEMO-103: Cải thiện UI đăng nhập
+    JiraAgent-->>AgentCoordinator: Xác nhận đã tạo các task
+    AgentCoordinator->>SlackAgent: Bước 5: Thông báo về các task mới
+    SlackAgent-->>AgentCoordinator: Xác nhận đã gửi thông báo
+    AgentCoordinator-->>User: Báo cáo kết quả phân tích và các task đã tạo
+```
 
 ## 2. Cấu hình kiểm thử và môi trường
 
@@ -246,19 +479,25 @@ curl -X POST "http://localhost:3001/central-agent/process" \
   - Các mối quan hệ phụ thuộc giữa các task
 
 **MockSlackAgent**:
-- Cấu hình các kênh: #general, #project-xdemo, #dev-team
+- Cấu hình các kênh: #general, #project-xdemo, #dev-team, #customer-feedback
 - Mẫu tin nhắn liên quan đến task và dự án
+- Mẫu phản hồi khách hàng về các tính năng
 - Hỗ trợ tìm kiếm tin nhắn liên quan đến các task XDEMO2-xxx
 - Hỗ trợ tìm kiếm tin nhắn về việc hoàn thành công việc
 
 **MockConfluenceAgent**:
 - Không gian làm việc mẫu: "XDEMO Project"
-- Các trang tài liệu: Requirements, Design Docs, Meeting Notes
+- Các trang tài liệu: Requirements, Design Docs, Meeting Notes, Customer Feedback
 - Mẫu báo cáo ngày và tuần
 
 **MockCalendarAgent**:
 - Lịch team với các sự kiện định kỳ: Daily Standup, Sprint Planning
 - Thời gian rảnh/bận của các thành viên
+- Danh sách phòng họp và tình trạng
+
+**MockEmailAgent**:
+- Mẫu email cho lời mời họp
+- Mẫu email phản hồi từ khách hàng
 
 ### 2.2 Metrics đo lường
 

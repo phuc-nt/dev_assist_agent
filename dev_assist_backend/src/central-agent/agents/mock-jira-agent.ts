@@ -7,13 +7,22 @@ import { StepResult } from '../models/action-plan.model';
 export class MockJiraAgent implements IAgent {
   private readonly logger = EnhancedLogger.getLogger('MockJiraAgent');
   
-  async executePrompt(prompt: string, options?: any): Promise<StepResult> {
+  async executePrompt(prompt: string): Promise<StepResult> {
     this.logger.log(`MockJiraAgent executing: ${prompt}`);
     
     // Giả lập độ trễ
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Kiểm tra trường hợp đặc biệt cho tính năng mới
+    if (prompt.toLowerCase().includes('tính năng mới') || prompt.toLowerCase().includes('feature')) {
+      return this.mockGetNewFeatureInfo();
+    }
     
     // Xử lý dựa trên prompt
+    if (prompt.includes('XDEMO2-1')) {
+      return this.mockGetIssueDetails('XDEMO2-1');
+    }
+    
     if (prompt.toLowerCase().includes('tìm') && (prompt.toLowerCase().includes('task') || prompt.toLowerCase().includes('công việc'))) {
       return this.findTasks(prompt);
     }
@@ -318,6 +327,105 @@ export class MockJiraAgent implements IAgent {
       metadata: {
         executionTime: 650,
         tokenUsage: 200
+      }
+    };
+  }
+  
+  /**
+   * Trả về thông tin giả lập về một issue cụ thể
+   */
+  private mockGetIssueDetails(issueId: string): StepResult {
+    return {
+      success: true,
+      data: {
+        id: issueId,
+        title: 'Lỗi đăng nhập trên thiết bị iOS',
+        description: 'Người dùng báo cáo không thể đăng nhập vào ứng dụng trên thiết bị iOS sau khi cập nhật lên phiên bản mới nhất. Lỗi xảy ra trên iOS 15 trở lên.',
+        assignee: 'Phúc Nguyễn',
+        status: 'In Progress',
+        priority: 'High',
+        epic: 'AUTH-123',
+        epicName: 'Cải thiện trải nghiệm đăng nhập',
+        comments: [
+          {
+            author: 'Minh',
+            content: 'Tôi đã tái tạo được lỗi này trên iPhone 12 với iOS 15.4. Có vẻ như vấn đề liên quan đến cách chúng ta xử lý token xác thực.',
+            created: '2023-05-15T09:23:45Z'
+          },
+          {
+            author: 'Hưng',
+            content: 'Tôi đã kiểm tra mã và thấy rằng chúng ta đang sử dụng một phương thức lưu trữ token đã bị deprecated từ iOS 15. Cần cập nhật để sử dụng KeyChain API mới.',
+            created: '2023-05-15T10:15:22Z'
+          }
+        ]
+      },
+      metadata: {
+        executionTime: 243,
+        tokenUsage: 120
+      }
+    };
+  }
+  
+  /**
+   * Trả về thông tin giả lập về tính năng mới
+   */
+  private mockGetNewFeatureInfo(): StepResult {
+    return {
+      success: true,
+      data: {
+        features: [
+          {
+            id: "XDEMO2-10",
+            title: "Xác thực hai yếu tố",
+            description: "Thêm tính năng xác thực hai yếu tố cho người dùng",
+            assignee: "Phúc",
+            status: "In Progress",
+            priority: "High",
+            epic: "XDEMO2-5",
+            epicName: "Cải thiện bảo mật"
+          },
+          {
+            id: "XDEMO2-11",
+            title: "Dashboard thống kê người dùng",
+            description: "Thêm dashboard thống kê người dùng cho admin",
+            assignee: "Đăng",
+            status: "To Do",
+            priority: "Medium",
+            epic: "XDEMO2-6",
+            epicName: "Báo cáo và thống kê"
+          }
+        ],
+        project: {
+          key: "XDEMO2",
+          name: "Dự án mẫu Demo 2",
+          teamMembers: [
+            {
+              name: "Phúc",
+              role: "Developer",
+              username: "phuc.nguyen"
+            },
+            {
+              name: "Hưng",
+              role: "Developer",
+              username: "hung.nguyen"
+            },
+            {
+              name: "Đăng",
+              role: "Developer",
+              username: "dang.nguyen"
+            },
+            {
+              name: "Minh",
+              role: "Tester",
+              username: "minh.nguyen"
+            }
+          ]
+        },
+        meetingNotes: "Cần tổ chức cuộc họp về tính năng xác thực mới"
+      },
+      metadata: {
+        executionTime: 300,
+        tokenUsage: 120
       }
     };
   }

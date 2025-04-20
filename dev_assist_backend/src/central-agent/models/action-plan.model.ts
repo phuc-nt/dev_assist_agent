@@ -23,7 +23,8 @@ export enum PlanStatus {
   RUNNING = 'running',     // Đang thực thi
   COMPLETED = 'completed', // Hoàn thành thành công
   FAILED = 'failed',       // Thất bại
-  CANCELLED = 'cancelled'  // Đã hủy
+  CANCELLED = 'cancelled', // Đã hủy
+  PENDING = 'pending'      // Đang chờ xử lý
 }
 
 export interface StepResult {
@@ -57,9 +58,14 @@ export interface ActionStep {
   startTime?: Date;
   endTime?: Date;
   error?: Error;
+  description?: string;
+  action?: string;
+  parameters?: any;
 }
 
 export interface ActionPlan {
+  id?: string;
+  parentPlanId?: string;
   steps: ActionStep[];
   currentStepIndex: number;
   executionContext: Record<string, any>;
@@ -68,4 +74,10 @@ export interface ActionPlan {
   endTime?: Date;
   error?: Error;
   overallProgress: number;
+  description?: string;
+  goal?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  isAdjustment?: boolean;
+  metadata?: any;
 } 

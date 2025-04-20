@@ -122,10 +122,43 @@ export class AgentCoordinator {
           }
         });
         
+        // Đảm bảo không có phụ thuộc vào các bước không tồn tại
+        adjustedPlan.steps.forEach(step => {
+          // Lọc bỏ các phụ thuộc không tồn tại trong kế hoạch mới
+          if (step.dependsOn && step.dependsOn.length > 0) {
+            step.dependsOn = step.dependsOn.filter(depId => 
+              adjustedPlan.steps.some(s => s.id === depId)
+            );
+          }
+        });
+        
+        // Đảm bảo bước đầu tiên không có phụ thuộc
+        if (adjustedPlan.steps.length > 0) {
+          adjustedPlan.steps[0].dependsOn = [];
+        }
+        
         // Cập nhật context
-        adjustedPlan.executionContext = plan.executionContext;
+        adjustedPlan.executionContext = {
+          ...plan.executionContext,
+          result: { ...plan.executionContext.result || {} },
+          evaluation: { ...plan.executionContext.evaluation || {} }
+        };
+        
+        // Đảm bảo các kết quả từ bước đã hoàn thành được chuyển sang context mới
+        plan.steps.forEach(step => {
+          if (step.status === StepStatus.SUCCEEDED && step.result) {
+            adjustedPlan.executionContext.result[step.id] = step.result;
+          }
+          if (step.evaluation) {
+            adjustedPlan.executionContext.evaluation[step.id] = step.evaluation;
+          }
+        });
+        
+        // Giữ thời gian bắt đầu
         adjustedPlan.startTime = plan.startTime;
         adjustedPlan.overallProgress = this.calculateProgress(adjustedPlan);
+        
+        this.logger.debug(`Đã điều chỉnh kế hoạch: ${adjustedPlan.steps.length} bước mới, bắt đầu với ${adjustedPlan.steps[0]?.id || 'không có bước nào'}`);
         
         return adjustedPlan;
       }
@@ -410,24 +443,83 @@ export class AgentCoordinator {
   }
   
   /**
-   * Render prompt template với context
+   * Render template với các biến từ context
    */
   private renderPromptTemplate(template: string, context: Record<string, any>): string {
-    try {
-      return template.replace(/\{([^}]+)\}/g, (match, path) => {
-        try {
-          // Đánh giá biểu thức trong {}
-          const evalFunction = new Function(...Object.keys(context), `return ${path};`);
-          const result = evalFunction(...Object.values(context));
-          return result !== undefined ? String(result) : match;
-        } catch (e) {
-          return match; // Giữ nguyên nếu không thể đánh giá
-        }
-      });
-    } catch (error) {
-      this.logger.error(`Lỗi khi render template: ${error.message}`);
-      return template;
+    if (!template || typeof template !== 'string') return template;
+    
+    // Nếu có object specifiedParticipants trong context, thêm vào template
+    if (context.specifiedParticipants && Array.isArray(context.specifiedParticipants)) {
+      if (!template.includes('context.specifiedParticipants')) {
+        // Thêm thông tin về specifiedParticipants vào cuối prompt
+        template += `\n\nLưu ý: Chỉ xét các thành viên được chỉ định trong context.specifiedParticipants = [${context.specifiedParticipants.map(p => `"${p}"`).join(', ')}]`;
+      }
     }
+    
+    // Thay thế các biến trong template
+    let result = template;
+    
+    // Thay thế các biến đơn giản kiểu {{variable}}
+    const simpleVariablePattern = /\{\{([\w\.]+)\}\}/g;
+    let match;
+    while ((match = simpleVariablePattern.exec(template)) !== null) {
+      const fullMatch = match[0];
+      const variablePath = match[1];
+      let value = this.getValueFromPath(context, variablePath);
+      value = typeof value === 'object' ? JSON.stringify(value) : String(value);
+      result = result.replace(fullMatch, value);
+    }
+    
+    // Thay thế các vòng lặp kiểu {{#each items}}...{{/each}}
+    const loopPattern = /\{\{#each\s+([\w\.]+)\}\}([\s\S]*?)\{\{\/each\}\}/g;
+    while ((match = loopPattern.exec(template)) !== null) {
+      const fullMatch = match[0];
+      const arrayPath = match[1];
+      const template = match[2];
+      
+      const array = this.getValueFromPath(context, arrayPath);
+      if (Array.isArray(array)) {
+        const renderedItems = array.map(item => {
+          let itemTemplate = template;
+          // Đơn giản hóa: thay thế {{this}} bằng item
+          itemTemplate = itemTemplate.replace(/\{\{this\}\}/g, String(item));
+          // Thay thế {{this.property}} cho các object
+          if (typeof item === 'object') {
+            const itemPattern = /\{\{this\.([\w\.]+)\}\}/g;
+            let itemMatch;
+            while ((itemMatch = itemPattern.exec(template)) !== null) {
+              const itemFullMatch = itemMatch[0];
+              const itemPath = itemMatch[1];
+              let value = this.getValueFromPath(item, itemPath);
+              value = typeof value === 'object' ? JSON.stringify(value) : String(value);
+              itemTemplate = itemTemplate.replace(itemFullMatch, value);
+            }
+          }
+          return itemTemplate;
+        }).join('');
+        result = result.replace(fullMatch, renderedItems);
+      } else {
+        result = result.replace(fullMatch, '');
+      }
+    }
+    
+    return result;
+  }
+  
+  /**
+   * Lấy giá trị từ đường dẫn (vd: result.step1.data.items)
+   */
+  private getValueFromPath(obj: any, path: string): any {
+    if (!obj || !path) return undefined;
+    const parts = path.split('.');
+    let current = obj;
+    
+    for (const part of parts) {
+      if (current === null || current === undefined) return undefined;
+      current = current[part];
+    }
+    
+    return current;
   }
   
   /**
