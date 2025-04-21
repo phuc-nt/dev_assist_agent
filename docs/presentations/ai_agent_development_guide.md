@@ -4,10 +4,11 @@
 1. [Giới thiệu về AI Agent](#1-giới-thiệu-về-ai-agent)
 2. [Kiến trúc Central Agent điều phối](#2-kiến-trúc-central-agent-điều-phối)
 3. [Các thành phần cốt lõi](#3-các-thành-phần-cốt-lõi)
-4. [Hướng dẫn triển khai Central Agent](#4-hướng-dẫn-triển-khai-central-agent)
-5. [Ví dụ triển khai cụ thể](#5-ví-dụ-triển-khai-cụ-thể)
-6. [Các lỗi thường gặp và cách khắc phục](#6-các-lỗi-thường-gặp-và-cách-khắc-phục)
+4. [Chi tiết về Action Planner](#4-chi-tiết-về-action-planner)
+5. [So sánh với các kiến trúc agent khác](#5-so-sánh-với-các-kiến-trúc-agent-khác)
+6. [Các thách thức khi triển khai AI Agent](#6-các-thách-thức-khi-triển-khai-ai-agent)
 7. [Tài liệu tham khảo](#7-tài-liệu-tham-khảo)
+8. [Lời kết](#8-lời-kết)
 
 ## 1. Giới thiệu về AI Agent
 
@@ -145,10 +146,10 @@ graph LR
     CA -->|1/ Nạp<br>môi trường| PCR[Config Reader]
     PCR -->|Trả về<br>context| CA
     
-    CA -->|2/ Nhận diện<br>ý định| IP[Input Processor]
+    CA -->|2/ Nhận diện<br>ý định| IP[Input Processor<br>🧠 LLM-Powered]
     IP -->|Trả về<br>processed input| CA
     
-    CA -->|3/ Lập<br>kế hoạch| AP[Action Planner]
+    CA -->|3/ Lập<br>kế hoạch| AP[Action Planner<br>🧠 LLM-Powered]
     AP -->|Trả về<br>action plan| CA
     
     CA -->|4/ Thực thi<br>kế hoạch| AC[Agent Coordinator]
@@ -160,7 +161,7 @@ graph LR
     A3 -->|Kết quả| AC
     AC -->|Kết quả<br>thực thi| CA
     
-    CA -->|5/ Tổng hợp<br>kết quả| RS[Result Synthesizer]
+    CA -->|5/ Tổng hợp<br>kết quả| RS[Result Synthesizer<br>🧠 LLM-Powered]
     RS -->|Phản hồi<br>tổng hợp| CA
     
     CA -->|Phản hồi| User
@@ -191,13 +192,17 @@ graph LR
         end
     end
     
+    classDef llmPowered fill:#fcf,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+    class IP,AP,RS llmPowered
+    
     style CA fill:#f96,stroke:#333,stroke-width:2px
     style PCR fill:#bbf,stroke:#333
-    style IP fill:#fcf,stroke:#333
-    style AP fill:#ffc,stroke:#333
     style AC fill:#cfc,stroke:#333
-    style RS fill:#fcc,stroke:#333
     style User fill:#ccf,stroke:#333
+    
+    %% Chú thích
+    LLM[🧠 = Sử dụng LLM]
+    style LLM fill:none,stroke:none
 ```
 
 ### 3.1 Config Reader (Bộ đọc cấu hình)
@@ -355,153 +360,63 @@ Phản hồi phải phù hợp với:
 - Mục tiêu ban đầu của người dùng
 ```
 
-## 4. Hướng dẫn triển khai Central Agent
+## 4. Chi tiết về Action Planner
 
-### 4.1 Cấu trúc dữ liệu
+Action Planner là thành phần quan trọng nhất trong kiến trúc Central Agent, chịu trách nhiệm chuyển đổi ý định của người dùng thành kế hoạch hành động cụ thể mà hệ thống có thể thực thi.
 
-Cấu trúc JSON của ActionPlan và ActionStep:
+### 4.1 Cấu trúc ActionPlan và ActionStep
+
+ActionPlan là cấu trúc dữ liệu chính trong hệ thống, đại diện cho toàn bộ kế hoạch thực thi một yêu cầu. Dưới đây là cấu trúc đơn giản của một ActionPlan:
 
 ```json
 {
-  "id": "plan-1a2b3c",
+  "id": "plan-123",
   "status": "running",
-  "startTime": "2025-04-20T14:05:49.344Z",
-  "currentStepIndex": 1,
-  "overallProgress": 33,
   "steps": [
     {
       "id": "step1",
       "agentType": "SLACK",
-      "prompt": "Tìm kiếm tin nhắn về tính năng mới và cuộc họp trong kênh dev-team",
+      "prompt": "Tìm kiếm tin nhắn liên quan đến cuộc họp",
       "dependsOn": [],
-      "condition": null,
-      "maxRetries": 2,
-      "timeout": 15000,
-      "status": "succeeded",
-      "startTime": "2025-04-20T14:05:49.646Z",
-      "endTime": "2025-04-20T14:05:50.246Z",
-      "result": {
-        "success": true,
-        "data": {
-          "messages": [
-            {
-              "text": "Chúng ta cần tổ chức cuộc họp về tính năng authentication",
-              "user": "Phúc",
-              "timestamp": "2025-04-18T14:05:49.646Z"
-            }
-          ]
-        },
-        "metadata": {
-          "executionTime": 340,
-          "tokenUsage": 220
-        }
-      }
+      "status": "succeeded"
     },
     {
       "id": "step2",
       "agentType": "CALENDAR",
-      "prompt": "Tìm thời gian rảnh chung cho Phúc, Hưng, Đăng và Minh trong tuần này",
+      "prompt": "Tìm thời gian rảnh chung cho team",
       "dependsOn": ["step1"],
-      "condition": null,
-      "maxRetries": 2,
-      "timeout": 20000,
-      "status": "running",
-      "startTime": "2025-04-20T14:05:50.300Z"
-    },
-    {
-      "id": "step3",
-      "agentType": "CALENDAR",
-      "prompt": "Tạo cuộc họp mới tại thời gian {result.step2.availableSlots[0]}",
-      "dependsOn": ["step2"],
-      "condition": "result.step2.availableSlots && result.step2.availableSlots.length > 0",
-      "maxRetries": 2,
-      "timeout": 15000,
-      "status": "pending"
+      "status": "running"
     }
   ],
   "executionContext": {
-    "result": {
-      "step1": {
-        "success": true,
-        "data": {
-          "messages": [...]
-        }
-      }
-    }
-  },
-  "isAdjustment": false,
-  "metadata": {
-    "userId": "user123",
-    "projectId": "XDEMO2"
+    "result": {}
   }
 }
 ```
 
-### 4.2 Cấu trúc module
+#### Các trường quan trọng trong ActionPlan
 
-#### Cấu trúc thư mục
+| Trường | Mô tả | Ví dụ giá trị |
+|--------|-------|--------------|
+| id | Định danh kế hoạch | "plan-123", "meeting-setup-456" |
+| status | Trạng thái thực thi | "created", "running", "completed", "failed" |
+| steps | Danh sách các bước | Mảng các ActionStep |
+| executionContext | Ngữ cảnh thực thi, lưu kết quả các bước | Đối tượng chứa kết quả |
 
-```
-src/
-├── central-agent/
-│   ├── models/
-│   │   ├── action-plan.model.ts
-│   │   └── execution-context.model.ts
-│   ├── input-processor/
-│   │   └── input-processor.service.ts
-│   ├── project-config/
-│   │   └── project-config-reader.service.ts
-│   ├── action-planner/
-│   │   └── action-planner.service.ts
-│   ├── agent-coordinator/
-│   │   └── agent-coordinator.service.ts
-│   ├── result-synthesizer/
-│   │   └── result-synthesizer.service.ts
-│   ├── file-storage/
-│   │   └── action-plan-storage.service.ts
-│   ├── central-agent.controller.ts
-│   ├── central-agent.module.ts
-│   └── central-agent.service.ts
-├── agents/
-│   ├── agent.interface.ts
-│   ├── jira-agent/
-│   ├── slack-agent/
-│   └── calendar-agent/
-├── config/
-│   ├── project_config_demo.json
-│   └── config.ts
-└── utils/
-    ├── logger.ts
-    └── error-handler.ts
-```
+#### Các trường quan trọng trong ActionStep
 
-#### Phân chia trách nhiệm
+| Trường | Mô tả | Ví dụ giá trị |
+|--------|-------|--------------|
+| id | Định danh bước | "step1", "fetchTeamMembers" |
+| agentType | Loại agent thực hiện | "SLACK", "CALENDAR", "JIRA" |
+| prompt | Chỉ dẫn chi tiết cho agent | "Tìm lịch rảnh của Phúc, Hưng, Đăng từ 1/6-5/6" |
+| dependsOn | Các bước phụ thuộc | ["step1", "step2"] |
+| condition | Điều kiện để thực hiện bước | "result.step1.success === true" |
+| status | Trạng thái của bước | "pending", "running", "succeeded", "failed" |
 
-```mermaid
-flowchart TB
-    subgraph "Central Agent"
-        direction LR
-        A[Controller] --> B[Service]
-        B --> C[Input Processor]
-        B --> D[Config Reader]
-        B --> E[Action Planner]
-        B --> F[Agent Coordinator]
-        B --> G[Result Synthesizer]
-    end
-    
-    F --> H[Agent Factory]
-    H --> I["Agent Interface<br>(abstraction)"]
-    
-    I --> J[JIRA Agent]
-    I --> K[Slack Agent]
-    I --> L[Calendar Agent]
-    
-    M[(Database)] --- B
-```
+### 4.2 Nguyên tắc thiết kế Prompt
 
-### 4.3 Hướng dẫn thiết kế prompt cho LLM
-
-#### Nguyên tắc thiết kế prompt
+Thiết kế prompt hiệu quả là yếu tố quan trọng quyết định chất lượng đầu ra của Action Planner. Dưới đây là các nguyên tắc thiết kế prompt:
 
 ```mermaid
 mindmap
@@ -528,9 +443,17 @@ mindmap
       Validation data
 ```
 
-## 5. Ví dụ triển khai cụ thể
+#### Design pattern cho LLM prompts
 
-### 5.1 Ví dụ về một ActionPlan thực tế
+| Pattern | Mô tả | Ứng dụng |
+|---------|-------|----------|
+| Chain-of-Thought | Yêu cầu LLM lý luận từng bước | Action Planner |
+| Few-shot learning | Cung cấp ví dụ để LLM học theo | Input Processor |
+| Role-based prompting | Gán vai trò cụ thể cho LLM | Result Synthesizer |
+| JSON Schema | Định nghĩa schema cho đầu ra | Tất cả thành phần LLM |
+| Context Window Management | Tối ưu sử dụng không gian context | Xử lý yêu cầu phức tạp |
+
+### 4.3 Ví dụ về một ActionPlan thực tế
 
 Với yêu cầu: "Sắp xếp cuộc họp với team để kickoff dự án X"
 
@@ -555,7 +478,40 @@ stateDiagram-v2
     AdjustedSuccess --> [*]
 ```
 
-### 5.2 Xử lý lỗi và điều chỉnh kế hoạch
+#### Ví dụ code tạo kế hoạch với LLM
+
+```typescript
+async function createActionPlan(
+  processedInput: ProcessedInput, 
+  projectContext: ProjectContext
+): Promise<ActionPlan> {
+  const prompt = `
+    Bạn là Action Planner trong hệ thống AI Agent. 
+    Hãy tạo kế hoạch hành động để thực hiện yêu cầu của người dùng.
+    
+    Yêu cầu đã xử lý: ${JSON.stringify(processedInput)}
+    Thông tin dự án: ${JSON.stringify(projectContext)}
+    Các agent có sẵn: SLACK, CALENDAR, JIRA, EMAIL
+    
+    Trả về kế hoạch dưới dạng JSON với cấu trúc:
+    {
+      "steps": [
+        {
+          "id": string,
+          "agentType": string,
+          "prompt": string,
+          "dependsOn": string[]
+        }
+      ]
+    }
+  `;
+  
+  const llmResponse = await callLLM(prompt);
+  return parseAndValidateActionPlan(llmResponse);
+}
+```
+
+### 4.4 Xử lý lỗi và điều chỉnh kế hoạch
 
 Khi không tìm được thời gian phù hợp cho tất cả mọi người:
 
@@ -581,4 +537,121 @@ sequenceDiagram
     
     CA->>U: "Không thể tìm thấy khung giờ cho tất cả. Đã gửi tin nhắn hỏi ý kiến team."
 ```
+
+#### Các chiến lược xử lý lỗi
+
+| Loại lỗi | Chiến lược | Ví dụ |
+|----------|------------|------|
+| Thiếu thông tin | Quay lại hỏi người dùng | "Bạn muốn cuộc họp diễn ra trong khoảng thời gian nào?" |
+| Xung đột | Tìm giải pháp thay thế | Đề xuất một số người tham gia online |
+| Thất bại kết nối | Retry với backoff | Thử lại sau 5s, 10s, 30s |
+| Lỗi logic | Điều chỉnh kế hoạch | Thay đổi thứ tự các bước |
+| Không thể giải quyết | Báo cáo và gợi ý | "Không thể sắp xếp cuộc họp, có thể chuyển sang email?" |
+
+## 5. So sánh với các kiến trúc agent khác
+
+```mermaid
+graph LR
+    subgraph "Central Agent"
+        direction LR
+        CA[Central Agent] --> PCR[Config Reader]
+        CA --> IP[Input Processor]
+        CA --> AP[Action Planner]
+        CA --> AC[Agent Coordinator]
+        CA --> RS[Result Synthesizer]
+    end
+    
+    subgraph "OpenAI Assistants API"
+        direction LR
+        AM[Assistant Manager] --> T[Tools]
+        AM --> R[Retrieval]
+        AM --> C[Code Interpreter]
+    end
+    
+    subgraph "Google ADK"
+        direction LR
+        CD[Controller] --> E[Executor]
+        CD --> P[Planner]
+        CD --> M[Memory]
+    end
+    
+    subgraph "Anthropic"
+        direction LR
+        CL[Claude] --> TC[Tool Calling]
+        CL --> TU[Tool Use]
+    end
+    
+    style CA fill:#f96,stroke:#333,stroke-width:2px
+    style AM fill:#6cf,stroke:#333,stroke-width:2px
+    style CD fill:#9f6,stroke:#333,stroke-width:2px
+    style CL fill:#c9f,stroke:#333,stroke-width:2px
+```
+
+### 5.1 So sánh kiến trúc
+
+| Kiến trúc | Đặc điểm chính | Ưu điểm | Nhược điểm |
+|-----------|---------------|--------|-----------|
+| Central Agent | Agent trung tâm điều phối các agent con riêng biệt | - Phân chia trách nhiệm rõ ràng<br>- Dễ mở rộng/thay thế thành phần<br>- Kiểm soát luồng chi tiết | - Phức tạp khi triển khai<br>- Phải quản lý nhiều thành phần |
+| OpenAI Assistants API | Agent Manager gọi các tool function | - Đơn giản<br>- Tích hợp sẵn nhiều công cụ<br>- Triển khai nhanh | - Khó tùy chỉnh chi tiết<br>- Giới hạn về điều khiển luồng logic |
+| Google ADK | Controller điều phối Planning & Execution | - Cấu trúc memory tốt<br>- Hỗ trợ nhiều loại tool<br>- Tối ưu về nhận thức môi trường | - Hạn chế về customization<br>- Cần kiến thức về framework |
+| Anthropic | Claude với Tool Use và Tool Calling | - API đơn giản<br>- Khả năng suy luận tốt<br>- Tích hợp sẵn với nhiều tool | - Ít kiểm soát chi tiết<br>- Phụ thuộc vào khả năng của Claude |
+
+### 5.2 Tương đồng và khác biệt
+
+Central Agent tương đồng với mẫu Manager của OpenAI và kiến trúc phân cấp của Google ADK, đều sử dụng một agent trung tâm để điều phối các agent chuyên biệt hoặc các tool function. Điểm khác là Central Agent được thiết kế để phân tách rõ các thành phần nhận thức (Input Processor), lập kế hoạch (Action Planner) và thực thi (Agent Coordinator), mang lại sự linh hoạt cao hơn.
+
+Việc phân chia thành các module riêng biệt (Input Processor, Action Planner, Agent Coordinator) tương tự như các thành phần cốt lõi trong kiến trúc của Anthropic, nhưng Central Agent có cấu trúc rõ ràng hơn về luồng xử lý và trách nhiệm của từng thành phần.
+
+## 6. Các thách thức khi triển khai AI Agent
+
+### 6.1 Hạn chế của LLM và cách khắc phục
+
+```mermaid
+mindmap
+  root((Thách thức<br>với LLM))
+    Hallucination
+      ::icon(fa fa-question-circle)
+      Kiểm tra thông tin đầu ra
+      Sử dụng "chain of thought"
+    Context Window
+      ::icon(fa fa-compress)
+      Tối ưu prompt
+      Lưu trữ context hiệu quả
+    Tính nhất quán
+      ::icon(fa fa-random)
+      Thiết kế schema nghiêm ngặt
+      Validation đầu ra
+    Độ trễ
+      ::icon(fa fa-clock)
+      Parallel processing
+      Caching kết quả
+    Bảo mật
+      ::icon(fa fa-lock)
+      Đánh giá dữ liệu đầu vào
+      Kiểm soát thông tin nhạy cảm
+```
+
+### 6.2 Nguyên tắc thiết kế AI Agent hiệu quả
+
+1. **Chia nhỏ nhiệm vụ phức tạp**: Phân tách thành các bước đơn giản, dễ quản lý
+2. **Thiết kế hướng trạng thái**: Lưu trữ và theo dõi trạng thái rõ ràng
+3. **Khả năng quan sát (Observability)**: Logging, monitoring cho từng bước
+4. **Thiết kế xử lý lỗi**: Retry logic, fallback mechanisms
+5. **Cân nhắc hiệu năng**: Tối ưu số lượng lời gọi LLM, kích thước input
+
+## 7. Tài liệu tham khảo
+
+1. [OpenAI Assistants API Documentation](https://platform.openai.com/docs/assistants/overview)
+2. [Google Agent Development Kit](https://developers.generativeai.google/agent/framework)
+3. [Anthropic Claude & Tool Use Documentation](https://docs.anthropic.com/claude/docs/tool-use)
+4. [LangChain Agent Documentation](https://python.langchain.com/docs/modules/agents/)
+5. [Microsoft Semantic Kernel](https://learn.microsoft.com/en-us/semantic-kernel/overview/)
+
+## 8. Lời kết
+
+Việc tự xây dựng một AI Agent từ đầu thay vì sử dụng các SDK hay framework có sẵn tương tự như việc có nhiều tiệm bán phở, nhưng vẫn có người muốn tự nấu phở tại nhà. Điều quan trọng ở đây là để thực sự hiểu được các concept và logic nền tảng, thì việc tự xây dựng từ đầu là cách học hiệu quả nhất.
+
+Khi đã nắm vững các khái niệm cốt lõi và logic thiết kế, bạn sẽ có thể dễ dàng áp dụng kiến thức này để triển khai AI Agent trên bất kỳ ngôn ngữ lập trình, framework hay nền tảng nào. Việc hiểu sâu về cơ chế hoạt động bên trong cũng cho phép bạn debug và tối ưu hệ thống hiệu quả hơn khi gặp vấn đề.
+
+Hơn nữa, việc xây dựng từ đầu cho phép bạn tùy chỉnh hoàn toàn theo nhu cầu cụ thể của dự án, không bị giới hạn bởi các chức năng và thiết kế có sẵn trong các SDK. Đây là lợi thế lớn khi phát triển các ứng dụng AI Agent chuyên biệt cho doanh nghiệp.
 
