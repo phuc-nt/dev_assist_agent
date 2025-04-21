@@ -114,29 +114,6 @@ sequenceDiagram
     CA->>User: Phản hồi người dùng
 ```
 
-### 2.3 Ưu điểm của kiến trúc Central Agent
-
-```mermaid
-mindmap
-  root((Central Agent<br>Advantages))
-    Quản lý tập trung
-      ::icon(fa fa-cogs)
-      Dễ giám sát
-      Quản lý lỗi thống nhất
-    Tách biệt trách nhiệm
-      ::icon(fa fa-cubes)
-      Mỗi agent chỉ làm một việc
-      Dễ mở rộng và thay thế
-    Tái sử dụng
-      ::icon(fa fa-recycle)
-      Các agent con có thể dùng lại
-      Kết hợp linh hoạt
-    Xử lý phức tạp
-      ::icon(fa fa-sitemap)
-      Quản lý luồng logic phức tạp
-      Phối hợp nhiều hệ thống
-```
-
 ## 3. Các thành phần cốt lõi
 
 ```mermaid
@@ -414,46 +391,7 @@ ActionPlan là cấu trúc dữ liệu chính trong hệ thống, đại diện 
 | condition | Điều kiện để thực hiện bước | "result.step1.success === true" |
 | status | Trạng thái của bước | "pending", "running", "succeeded", "failed" |
 
-### 4.2 Nguyên tắc thiết kế Prompt
-
-Thiết kế prompt hiệu quả là yếu tố quan trọng quyết định chất lượng đầu ra của Action Planner. Dưới đây là các nguyên tắc thiết kế prompt:
-
-```mermaid
-mindmap
-  root((Prompt Design))
-    Clear instruction
-      ::icon(fa fa-check)
-      Mục tiêu cụ thể
-      Format đầu ra mong muốn
-    Context provision
-      ::icon(fa fa-info-circle)
-      Dữ liệu liên quan
-      Giới hạn phạm vi
-    Examples
-      ::icon(fa fa-list)
-      Ví dụ đầu vào-đầu ra
-      Trường hợp đặc biệt
-    Structured format
-      ::icon(fa fa-table)
-      JSON, YAML, etc
-      Schema validation
-    Error handling
-      ::icon(fa fa-exclamation-triangle)
-      Cách xử lý edge cases
-      Validation data
-```
-
-#### Design pattern cho LLM prompts
-
-| Pattern | Mô tả | Ứng dụng |
-|---------|-------|----------|
-| Chain-of-Thought | Yêu cầu LLM lý luận từng bước | Action Planner |
-| Few-shot learning | Cung cấp ví dụ để LLM học theo | Input Processor |
-| Role-based prompting | Gán vai trò cụ thể cho LLM | Result Synthesizer |
-| JSON Schema | Định nghĩa schema cho đầu ra | Tất cả thành phần LLM |
-| Context Window Management | Tối ưu sử dụng không gian context | Xử lý yêu cầu phức tạp |
-
-### 4.3 Ví dụ về một ActionPlan thực tế
+### 4.2 Ví dụ về một ActionPlan thực tế
 
 Với yêu cầu: "Sắp xếp cuộc họp với team để kickoff dự án X"
 
@@ -478,40 +416,7 @@ stateDiagram-v2
     AdjustedSuccess --> [*]
 ```
 
-#### Ví dụ code tạo kế hoạch với LLM
-
-```typescript
-async function createActionPlan(
-  processedInput: ProcessedInput, 
-  projectContext: ProjectContext
-): Promise<ActionPlan> {
-  const prompt = `
-    Bạn là Action Planner trong hệ thống AI Agent. 
-    Hãy tạo kế hoạch hành động để thực hiện yêu cầu của người dùng.
-    
-    Yêu cầu đã xử lý: ${JSON.stringify(processedInput)}
-    Thông tin dự án: ${JSON.stringify(projectContext)}
-    Các agent có sẵn: SLACK, CALENDAR, JIRA, EMAIL
-    
-    Trả về kế hoạch dưới dạng JSON với cấu trúc:
-    {
-      "steps": [
-        {
-          "id": string,
-          "agentType": string,
-          "prompt": string,
-          "dependsOn": string[]
-        }
-      ]
-    }
-  `;
-  
-  const llmResponse = await callLLM(prompt);
-  return parseAndValidateActionPlan(llmResponse);
-}
-```
-
-### 4.4 Xử lý lỗi và điều chỉnh kế hoạch
+### 4.3 Xử lý lỗi và điều chỉnh kế hoạch
 
 Khi không tìm được thời gian phù hợp cho tất cả mọi người:
 
@@ -552,55 +457,64 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-    subgraph "Central Agent"
+    subgraph "Anthropic: Autonomous Agent"
         direction LR
-        CA[Central Agent] --> PCR[Config Reader]
-        CA --> IP[Input Processor]
+        AA[Autonomous Agent] --> LLM[Augmented LLM]
+        LLM --> TI[Tool Interface]
+        LLM --> FM[Feedback Mechanism]
+        LLM --> RM[Reminder System]
+        LLM --> EG[Environment Grounding]
+    end
+    
+    subgraph "Anthropic: Orchestrator-workers"
+        direction LR
+        ORC[Orchestrator LLM] --> TB[Task Breakdown]
+        ORC --> DEL[Delegation]
+        ORC --> SYN[Result Synthesis]
+        DEL --> W1[Worker LLM 1]
+        DEL --> W2[Worker LLM 2]
+        DEL --> W3[Worker LLM 3]
+        W1 --> SYN
+        W2 --> SYN
+        W3 --> SYN
+    end
+
+    subgraph "(This) Central Agent"
+        direction LR
+        CA[Central Agent] --> IP[Input Processor]
         CA --> AP[Action Planner]
-        CA --> AC[Agent Coordinator]
+        CA --> AC[Agent Coordinator] 
         CA --> RS[Result Synthesizer]
-    end
-    
-    subgraph "OpenAI Assistants API"
-        direction LR
-        AM[Assistant Manager] --> T[Tools]
-        AM --> R[Retrieval]
-        AM --> C[Code Interpreter]
-    end
-    
-    subgraph "Google ADK"
-        direction LR
-        CD[Controller] --> E[Executor]
-        CD --> P[Planner]
-        CD --> M[Memory]
-    end
-    
-    subgraph "Anthropic"
-        direction LR
-        CL[Claude] --> TC[Tool Calling]
-        CL --> TU[Tool Use]
+        CA --> PCR[Config Reader]
     end
     
     style CA fill:#f96,stroke:#333,stroke-width:2px
-    style AM fill:#6cf,stroke:#333,stroke-width:2px
-    style CD fill:#9f6,stroke:#333,stroke-width:2px
-    style CL fill:#c9f,stroke:#333,stroke-width:2px
+    style ORC fill:#c9f,stroke:#333,stroke-width:2px
+    style AA fill:#c9f,stroke:#333,stroke-width:2px
 ```
 
 ### 5.1 So sánh kiến trúc
 
-| Kiến trúc | Đặc điểm chính | Ưu điểm | Nhược điểm |
-|-----------|---------------|--------|-----------|
-| Central Agent | Agent trung tâm điều phối các agent con riêng biệt | - Phân chia trách nhiệm rõ ràng<br>- Dễ mở rộng/thay thế thành phần<br>- Kiểm soát luồng chi tiết | - Phức tạp khi triển khai<br>- Phải quản lý nhiều thành phần |
-| OpenAI Assistants API | Agent Manager gọi các tool function | - Đơn giản<br>- Tích hợp sẵn nhiều công cụ<br>- Triển khai nhanh | - Khó tùy chỉnh chi tiết<br>- Giới hạn về điều khiển luồng logic |
-| Google ADK | Controller điều phối Planning & Execution | - Cấu trúc memory tốt<br>- Hỗ trợ nhiều loại tool<br>- Tối ưu về nhận thức môi trường | - Hạn chế về customization<br>- Cần kiến thức về framework |
-| Anthropic | Claude với Tool Use và Tool Calling | - API đơn giản<br>- Khả năng suy luận tốt<br>- Tích hợp sẵn với nhiều tool | - Ít kiểm soát chi tiết<br>- Phụ thuộc vào khả năng của Claude |
+| Kiến trúc | Đặc điểm chính | Ưu điểm | Nhược điểm | Khi nào sử dụng |
+|-----------|---------------|--------|-----------|----------------|
+| Central Agent | Agent trung tâm điều phối các agent con riêng biệt | - Phân chia trách nhiệm rõ ràng<br>- Dễ mở rộng/thay thế thành phần<br>- Kiểm soát luồng chi tiết<br>- Cơ chế feedback và điều chỉnh kế hoạch | - Phức tạp khi triển khai<br>- Phải quản lý nhiều thành phần | Khi cần kiểm soát chi tiết và linh hoạt trong việc tích hợp nhiều dịch vụ |
+| Orchestrator-workers (Anthropic) | LLM trung tâm phân chia nhiệm vụ động và điều phối các worker LLMs | - Linh hoạt trong xác định nhiệm vụ phụ<br>- Phù hợp cho tác vụ phức tạp, không dự đoán được<br>- Dễ dàng tổng hợp kết quả từ nhiều nguồn | - Tốn kém khi sử dụng nhiều lệnh gọi LLM<br>- Phụ thuộc vào khả năng chia nhỏ nhiệm vụ của orchestrator<br>- Thiếu cơ chế feedback và điều chỉnh kế hoạch | Tác vụ phức tạp không thể dự đoán các nhiệm vụ phụ, như coding phức tạp hoặc tìm kiếm thông tin từ nhiều nguồn |
+| Autonomous Agent (Anthropic) | Hệ thống tự chủ với LLM tăng cường điều khiển quy trình và sử dụng công cụ | - Khả năng thích ứng với phản hồi môi trường<br>- Tự chủ và linh hoạt cao<br>- Xử lý tốt các tác vụ không dự đoán được<br>- Cơ chế feedback mạnh mẽ | - Phức tạp trong triển khai<br>- Khó kiểm soát và dự đoán hành vi<br>- Yêu cầu kỹ thuật bảo mật cao hơn | Các tác vụ mở, các bước không dự đoán được, đặc biệt trong phân tích dữ liệu, hỗ trợ khách hàng hoặc nghiên cứu khoa học |
 
 ### 5.2 Tương đồng và khác biệt
 
-Central Agent tương đồng với mẫu Manager của OpenAI và kiến trúc phân cấp của Google ADK, đều sử dụng một agent trung tâm để điều phối các agent chuyên biệt hoặc các tool function. Điểm khác là Central Agent được thiết kế để phân tách rõ các thành phần nhận thức (Input Processor), lập kế hoạch (Action Planner) và thực thi (Agent Coordinator), mang lại sự linh hoạt cao hơn.
+#### Tương đồng
+- Tất cả đều sử dụng thành phần trung tâm để phân công và điều phối công việc
+- Đều có quy trình xử lý tuần tự từ đầu vào đến kết quả
+- Khả năng mở rộng bằng cách thêm công cụ hoặc thành phần mới
 
-Việc phân chia thành các module riêng biệt (Input Processor, Action Planner, Agent Coordinator) tương tự như các thành phần cốt lõi trong kiến trúc của Anthropic, nhưng Central Agent có cấu trúc rõ ràng hơn về luồng xử lý và trách nhiệm của từng thành phần.
+#### Khác biệt chính
+- **Cơ chế feedback**: Central Agent và Autonomous Agent có cơ chế feedback và điều chỉnh kế hoạch, Orchestrator-workers thiếu tính năng này
+- **Mức độ tự chủ**: Autonomous Agent > Central Agent > Orchestrator-workers
+- **Xác định nhiệm vụ phụ**: Central Agent (định nghĩa rõ ràng), Orchestrator-workers (phân chia động), Autonomous Agent (tự xác định và thích ứng)
+- **Khả năng thích ứng**: Orchestrator-workers không thể điều chỉnh nếu kết quả không đạt yêu cầu
+
+Anthropic nhấn mạnh ba nguyên tắc cốt lõi cho AI agent hiệu quả: đơn giản hóa trong thiết kế, minh bạch trong hoạt động, và tài liệu hóa/kiểm tra toàn diện.
 
 ## 6. Các thách thức khi triển khai AI Agent
 
@@ -639,15 +553,7 @@ mindmap
 4. **Thiết kế xử lý lỗi**: Retry logic, fallback mechanisms
 5. **Cân nhắc hiệu năng**: Tối ưu số lượng lời gọi LLM, kích thước input
 
-## 7. Tài liệu tham khảo
-
-1. [OpenAI Assistants API Documentation](https://platform.openai.com/docs/assistants/overview)
-2. [Google Agent Development Kit](https://developers.generativeai.google/agent/framework)
-3. [Anthropic Claude & Tool Use Documentation](https://docs.anthropic.com/claude/docs/tool-use)
-4. [LangChain Agent Documentation](https://python.langchain.com/docs/modules/agents/)
-5. [Microsoft Semantic Kernel](https://learn.microsoft.com/en-us/semantic-kernel/overview/)
-
-## 8. Lời kết
+## 7. Lời kết
 
 Việc tự xây dựng một AI Agent từ đầu thay vì sử dụng các SDK hay framework có sẵn tương tự như việc có nhiều tiệm bán phở, nhưng vẫn có người muốn tự nấu phở tại nhà. Điều quan trọng ở đây là để thực sự hiểu được các concept và logic nền tảng, thì việc tự xây dựng từ đầu là cách học hiệu quả nhất.
 
