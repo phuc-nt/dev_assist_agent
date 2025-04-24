@@ -3,6 +3,8 @@
 ## Tổng quan
 Tài liệu này mô tả kế hoạch triển khai Model Context Protocol (MCP) Server cho JIRA và Confluence, hoạt động như các Sub-Agent trong kiến trúc DevAssist Bot. MCP Server cho phép các mô hình AI như Claude tương tác với JIRA và Confluence theo cách tiêu chuẩn hóa, đóng vai trò là cầu nối giữa Central Agent và hệ thống Atlassian.
 
+Quá trình triển khai được chia thành 12 giai đoạn, từ thiết lập cơ bản và xây dựng các dịch vụ API đến containerization với Docker, kiểm thử với MCP client bên thứ 3, và cuối cùng là tích hợp với Central Agent của DevAssist. Kế hoạch này đảm bảo MCP Server phát triển theo các bước rõ ràng, được kiểm thử kỹ lưỡng và sẵn sàng cho triển khai trong môi trường production.
+
 ## Danh sách tác vụ và tiến độ
 
 ### Phase 1: Thiết lập cơ bản
@@ -59,24 +61,73 @@ Tài liệu này mô tả kế hoạch triển khai Model Context Protocol (MCP)
 - [x] Thiết lập HTTP Transport cho server
 
 ### Phase 7: Kiểm thử và tối ưu
-- [ ] Tạo kịch bản kiểm thử cơ bản
-- [ ] Kiểm thử từng công cụ MCP
-- [ ] Tối ưu xử lý lỗi và performance
+- [x] Tạo kịch bản kiểm thử cơ bản
+  - [x] Kiểm thử kết nối với API Jira thật
+  - [x] Kiểm thử cơ bản với mock data
+  - [x] Hoàn thiện kiểm thử tất cả các phương thức trong services
+- [x] Kiểm thử từng công cụ MCP
+  - [x] Thiết lập các test đơn giản cho công cụ MCP Jira và Confluence
+  - [x] Hoàn thiện kiểm thử tất cả các công cụ MCP
+- [x] Tối ưu xử lý lỗi và performance
+  - [x] Cập nhật cấu hình test để hỗ trợ môi trường test
+  - [x] Cải thiện xử lý lỗi khi API không phản hồi
+  - [x] Tối ưu hóa xử lý version khi cập nhật trang Confluence
 - [x] Thêm logging để giám sát hoạt động
   - [x] Tạo module utils/logging.ts với các cấp độ nhật ký
   - [x] Tạo module utils/error-handler.ts để xử lý lỗi nhất quán
 
-### Phase 8: Tích hợp với Central Agent
-- [ ] Xác định giao thức giao tiếp giữa Central Agent và MCP Server
-- [ ] Triển khai endpoint cho Central Agent gọi đến
-- [ ] Kiểm thử tích hợp giữa Central Agent và MCP Server
+### Phase 8: Containerization với Docker
+- [ ] Thiết lập Docker cho môi trường phát triển
+  - [ ] Tạo Dockerfile cho MCP Server
+  - [ ] Cấu hình multi-stage build để tối ưu kích thước image
+  - [ ] Thiết lập .dockerignore để loại bỏ các file không cần thiết
+- [ ] Cấu hình Docker Compose
+  - [ ] Tạo file docker-compose.yml cho môi trường phát triển
+  - [ ] Định nghĩa volumes cho persistence data
+  - [ ] Cấu hình biến môi trường trong Docker
+- [ ] Tối ưu Docker image
+  - [ ] Sử dụng image cơ sở nhẹ (Node Alpine)
+  - [ ] Cài đặt chỉ các dependencies cần thiết cho production
+  - [ ] Tối ưu layer caching
 
-### Phase 9: Bảo mật và xác thực
+### Phase 9: Kiểm thử với MCP Client bên thứ 3
+- [ ] Thiết lập môi trường test với MCP Client
+  - [ ] Cấu hình MCP Client để kết nối với MCP Server
+  - [ ] Thiết lập các test case tích hợp
+  - [ ] Tạo tài liệu hướng dẫn kết nối
+- [ ] Kiểm tra các chức năng JIRA qua MCP Client
+  - [ ] Kiểm tra lấy danh sách dự án
+  - [ ] Kiểm tra tạo và cập nhật task
+  - [ ] Kiểm tra tìm kiếm và lấy chi tiết task
+- [ ] Kiểm tra các chức năng Confluence qua MCP Client
+  - [ ] Kiểm tra lấy danh sách không gian
+  - [ ] Kiểm tra tạo và cập nhật trang
+  - [ ] Kiểm tra tìm kiếm nội dung
+- [ ] Xử lý phản hồi và cải tiến
+  - [ ] Thu thập phản hồi từ bên thứ 3
+  - [ ] Cải thiện API dựa trên phản hồi
+  - [ ] Cập nhật tài liệu API
+
+### Phase 10: Tích hợp với Central Agent
+- [ ] Xác định giao thức giao tiếp giữa Central Agent và MCP Server
+  - [ ] Định nghĩa schema cho các request và response
+  - [ ] Thiết lập cơ chế xác thực giữa Central Agent và MCP Server
+  - [ ] Định nghĩa API endpoints dành riêng cho Central Agent
+- [ ] Triển khai endpoint cho Central Agent gọi đến
+  - [ ] Tạo middleware xử lý request từ Central Agent
+  - [ ] Triển khai cơ chế rate limiting cho các request từ Central Agent
+  - [ ] Tạo adapter chuyển đổi dữ liệu giữa các hệ thống
+- [ ] Kiểm thử tích hợp giữa Central Agent và MCP Server
+  - [ ] Thiết lập môi trường test tích hợp
+  - [ ] Tạo test case end-to-end
+  - [ ] Giám sát hiệu năng và độ trễ trong quá trình tích hợp
+
+### Phase 11: Bảo mật và xác thực
 - [ ] Thêm cơ chế xác thực cho MCP Server
 - [ ] Triển khai quản lý API token an toàn
 - [ ] Đảm bảo HTTPS cho kết nối
 
-### Phase 10: Triển khai giám sát và ghi nhật ký
+### Phase 12: Triển khai giám sát và ghi nhật ký
 - [ ] Triển khai hệ thống logging chi tiết
 - [ ] Thiết lập giám sát hiệu suất
 - [ ] Tạo dashboard để theo dõi sử dụng
@@ -100,6 +151,13 @@ dev_mcp_server/
 │   │   ├── logging.ts
 │   │   └── error-handler.ts
 │   └── server.ts       # Điểm khởi đầu của ứng dụng
+├── __tests__/          # Các file kiểm thử
+│   ├── connection.test.ts
+│   ├── real-atlassian.test.ts
+│   └── quick-atlassian.test.ts
+├── Dockerfile          # Cấu hình Docker cho ứng dụng
+├── .dockerignore       # Các file và thư mục bỏ qua khi build Docker
+├── docker-compose.yml  # Cấu hình Docker Compose cho môi trường phát triển
 ├── .env                # Biến môi trường
 ├── package.json
 ├── tsconfig.json
@@ -207,6 +265,68 @@ Trong quá trình phát triển MCP Server, chúng tôi đã rút ra một số 
     - Chuẩn hóa cấu trúc lỗi với message, code, statusCode và details
     - Chuyển đổi lỗi từ bên ngoài thành lỗi nội bộ nhất quán
     - Ẩn thông tin nhạy cảm trong phản hồi lỗi ở môi trường sản xuất
+
+17. **Chiến lược kiểm thử đa tầng**:
+    - Phân tầng kiểm thử thành nhiều cấp độ (kết nối cơ bản, tích hợp nhanh, tích hợp đầy đủ)
+    - Tạo file test có mục đích rõ ràng, tránh trùng lặp và dư thừa
+    - Thiết lập scripts test chuyên biệt trong package.json để dễ dàng thực hiện từng loại test
+
+18. **Xử lý version conflict tự động**:
+    - Tự động lấy version hiện tại từ API thay vì phụ thuộc vào tham số truyền vào
+    - Tự động tăng version khi thực hiện cập nhật để tránh conflict
+    - Xử lý lỗi và log chi tiết khi xảy ra version conflict
+
+19. **Thiết kế test thích ứng**:
+    - Kiểm tra điều kiện môi trường trước khi chạy test (RUN_REAL_TESTS, token API)
+    - Tự động bỏ qua test không phù hợp thay vì báo lỗi
+    - Hiển thị thông báo hữu ích khi bỏ qua test để người dùng hiểu rõ lý do
+
+20. **Tối ưu hóa kiểm thử API thực tế**:
+    - Thiết kế các test case độc lập, tránh phụ thuộc vào trạng thái trước đó
+    - Sử dụng timestamp hoặc UUID trong dữ liệu test để tránh xung đột
+    - Thêm thông tin debug đầy đủ khi test API thực tế để dễ dàng theo dõi và gỡ lỗi
+
+## Cấu trúc kiểm thử
+
+Hệ thống kiểm thử của MCP Server đã được cải tiến để tập trung vào ba loại test chính, đảm bảo cả tính toàn diện và hiệu quả:
+
+### 1. Test kết nối cơ bản (connection.test.ts)
+- Kiểm tra khả năng kết nối cơ bản với API Jira và Confluence
+- Xác minh xác thực API token hoạt động đúng
+- Kiểm tra định dạng phản hồi có cấu trúc
+
+### 2. Test tích hợp đầy đủ (real-atlassian.test.ts)
+- Kiểm tra toàn diện tất cả các chức năng của JIRA (6 chức năng)
+- Kiểm tra toàn diện tất cả các chức năng của Confluence (6 chức năng)
+- Kiểm tra đầy đủ luồng làm việc từ tạo, đọc, cập nhật đến tìm kiếm
+- Đảm bảo xử lý version khi cập nhật trang Confluence hoạt động đúng
+
+### 3. Test tích hợp nhanh (quick-atlassian.test.ts)
+- Test nhanh với 2 chức năng cơ bản của JIRA (lấy dự án và tạo task)
+- Test nhanh với 2 chức năng cơ bản của Confluence (lấy không gian và tạo trang)
+- Phù hợp cho kiểm tra nhanh chóng trong quá trình phát triển
+
+### Lệnh chạy test
+Các script đã được thêm vào package.json để dễ dàng chạy test:
+```bash
+# Chạy tất cả các test
+npm test
+
+# Chạy test kết nối cơ bản
+npm run test:connection
+
+# Chạy test tích hợp đầy đủ với API thực tế
+npm run test:real
+
+# Chạy test tích hợp nhanh với API thực tế
+npm run test:quick
+```
+
+### Cải tiến quan trọng
+1. **Xử lý version trong updatePage**: Đã khắc phục lỗi khi cập nhật trang Confluence bằng cách tự động lấy và tăng số phiên bản.
+2. **Kiểm tra tự động**: Các test sẽ tự động bỏ qua nếu không có token API hoặc không được cấu hình để chạy với API thật.
+3. **Cải thiện logging**: Thêm chi tiết log trong quá trình kiểm thử để dễ dàng theo dõi và gỡ lỗi.
+4. **Thống nhất cấu trúc test**: Áp dụng cùng một mẫu cho tất cả các test để đảm bảo tính nhất quán.
 
 ## Tài nguyên cần thiết
 - **Atlassian API Token**: Cần tạo API token cho JIRA và Confluence

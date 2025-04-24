@@ -3,7 +3,14 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watchAll",
+    "test:real": "RUN_REAL_TESTS=true jest -t \"Real Atlassian Integration Tests\"",
+    "test:quick": "RUN_REAL_TESTS=true jest -t \"Quick Atlassian API Tests\"",
+    "test:connection": "jest -t \"API Connection\"",
+    "dev": "nodemon --exec ts-node src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
   },
   "keywords": [],
   "author": "",
@@ -15,8 +22,16 @@
     "zod": "^3.24.3"
   },
   "devDependencies": {
+    "@jest/globals": "^29.7.0",
+    "@types/jest": "^29.5.12",
     "@types/node": "^22.14.1",
+    "@types/node-fetch": "^2.6.12",
+    "@types/supertest": "^6.0.3",
+    "jest": "^29.7.0",
+    "node-fetch": "^3.3.2",
     "nodemon": "^3.1.10",
+    "supertest": "^6.3.4",
+    "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }

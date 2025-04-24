@@ -1,14 +1,52 @@
 import env from '../config/env';
 import { ConfluenceSpace, ConfluencePage, ServiceResult } from '../types';
+import * as fs from 'fs';
+import * as path from 'path';
 
-// Đọc thông tin cấu hình project từ tệp project_config_demo.json
-// Trong thực tế, chúng ta nên đọc từ file cấu hình riêng và quản lý đúng cách
+// Đường dẫn tới file .env.test
+const envTestPath = path.join(process.cwd(), '.env.test');
+
+// Lấy thông tin từ file .env.test nếu có
+let CONFLUENCE_API_TOKEN = env.confluence.apiToken;
+let CONFLUENCE_EMAIL = env.confluence.email;
+
+// Thử đọc token từ file .env.test trực tiếp (không qua dotenv vì nó không xử lý biến ${VAR})
+try {
+  if (fs.existsSync(envTestPath)) {
+    const envContent = fs.readFileSync(envTestPath, 'utf8');
+    
+    // Đọc CONFLUENCE_API_TOKEN
+    const tokenMatch = envContent.match(/CONFLUENCE_API_TOKEN=([^\n]+)/);
+    if (tokenMatch && tokenMatch[1]) {
+      CONFLUENCE_API_TOKEN = tokenMatch[1];
+      console.log('Using Confluence token from .env.test file');
+    }
+    
+    // Đọc CONFLUENCE_EMAIL
+    const emailMatch = envContent.match(/CONFLUENCE_EMAIL=([^\n]+)/);
+    if (emailMatch && emailMatch[1]) {
+      CONFLUENCE_EMAIL = emailMatch[1];
+      console.log('Using Confluence email from .env.test file');
+    }
+  }
+} catch (err) {
+  console.error('Error reading .env.test file:', err);
+}
+
+console.log('Using Confluence credentials:');
+console.log(`- Email: ${CONFLUENCE_EMAIL}`);
+console.log(`- Token length: ${CONFLUENCE_API_TOKEN?.length || 0}`);
+
+// Đọc thông tin cấu hình project
 const CONFLUENCE_DOMAIN = 'https://phuc-nt.atlassian.net';
 const CONFLUENCE_SPACE_KEY = 'TX';
 
 // Cấu hình cơ bản cho các yêu cầu API Confluence
 const CONFLUENCE_API_BASE = `${CONFLUENCE_DOMAIN}/wiki/rest/api`;
-const AUTH_HEADER = `Basic ${Buffer.from(`${env.confluence.email}:${env.confluence.apiToken}`).toString('base64')}`;
+
+// Tạo Auth header từ giá trị trực tiếp, không qua biến môi trường
+const AUTH_HEADER = `Basic ${Buffer.from(`${CONFLUENCE_EMAIL}:${CONFLUENCE_API_TOKEN}`).toString('base64')}`;
+console.log(`- Auth header length: ${AUTH_HEADER.length}`);
 
 /**
  * Xử lý lỗi API từ Confluence
@@ -31,6 +69,8 @@ function handleConfluenceError(error: any): ServiceResult<any> {
  */
 export async function getSpaces(): Promise<ServiceResult<{ spaces: ConfluenceSpace[] }>> {
   try {
+    console.log(`Fetching spaces from URL: ${CONFLUENCE_API_BASE}/space`);
+    
     const response = await fetch(`${CONFLUENCE_API_BASE}/space`, {
       headers: {
         'Authorization': AUTH_HEADER,
@@ -38,11 +78,21 @@ export async function getSpaces(): Promise<ServiceResult<{ spaces: ConfluenceSpa
       }
     });
     
+    console.log(`Confluence API response status: ${response.status}`);
+    
+    // Lấy dữ liệu phản hồi dù có lỗi hay không
+    const result = await response.json();
+    
+    // Kiểm tra phản hồi có thành công không
     if (!response.ok) {
       throw new Error(`Failed to fetch spaces: ${response.statusText}`);
     }
     
-    const result = await response.json();
+    // Kiểm tra cấu trúc phản hồi có đúng không
+    if (!result.results || !Array.isArray(result.results)) {
+      console.warn('Unexpected response structure:', result);
+      throw new Error('Unexpected response structure from Confluence API');
+    }
     
     return {
       success: true,
@@ -66,18 +116,31 @@ export async function getSpaces(): Promise<ServiceResult<{ spaces: ConfluenceSpa
  */
 export async function getPages(spaceKey: string = CONFLUENCE_SPACE_KEY): Promise<ServiceResult<{ pages: ConfluencePage[] }>> {
   try {
-    const response = await fetch(`${CONFLUENCE_API_BASE}/content?spaceKey=${spaceKey}&type=page&expand=version`, {
+    const url = `${CONFLUENCE_API_BASE}/content?spaceKey=${spaceKey}&type=page&expand=version`;
+    console.log(`Fetching pages from URL: ${url}`);
+    
+    const response = await fetch(url, {
       headers: {
         'Authorization': AUTH_HEADER,
         'Accept': 'application/json'
       }
     });
     
+    console.log(`Confluence API response status: ${response.status}`);
+    
+    // Lấy dữ liệu phản hồi dù có lỗi hay không
+    const result = await response.json();
+    
+    // Kiểm tra phản hồi có thành công không
     if (!response.ok) {
       throw new Error(`Failed to fetch pages: ${response.statusText}`);
     }
     
-    const result = await response.json();
+    // Kiểm tra cấu trúc phản hồi có đúng không
+    if (!result.results || !Array.isArray(result.results)) {
+      console.warn('Unexpected response structure:', result);
+      throw new Error('Unexpected response structure from Confluence API');
+    }
     
     return {
       success: true,
@@ -102,18 +165,25 @@ export async function getPages(spaceKey: string = CONFLUENCE_SPACE_KEY): Promise
  */
 export async function getPageContent(pageId: string): Promise<ServiceResult<ConfluencePage>> {
   try {
-    const response = await fetch(`${CONFLUENCE_API_BASE}/content/${pageId}?expand=body.storage,version,space`, {
+    const url = `${CONFLUENCE_API_BASE}/content/${pageId}?expand=body.storage,version,space`;
+    console.log(`Fetching page content from URL: ${url}`);
+    
+    const response = await fetch(url, {
       headers: {
         'Authorization': AUTH_HEADER,
         'Accept': 'application/json'
       }
     });
     
+    console.log(`Confluence API response status: ${response.status}`);
+    
+    // Lấy dữ liệu phản hồi dù có lỗi hay không
+    const page = await response.json();
+    
+    // Kiểm tra phản hồi có thành công không
     if (!response.ok) {
       throw new Error(`Failed to fetch page content: ${response.statusText}`);
     }
-    
-    const page = await response.json();
     
     return {
       success: true,
@@ -159,6 +229,9 @@ export async function createPage(
       body.ancestors = [{ id: parentId }];
     }
     
+    console.log(`Creating page in space "${spaceKey}" with title "${title}"`);
+    console.log(`Using URL: ${CONFLUENCE_API_BASE}/content`);
+    
     const response = await fetch(`${CONFLUENCE_API_BASE}/content`, {
       method: 'POST',
       headers: {
@@ -169,11 +242,16 @@ export async function createPage(
       body: JSON.stringify(body)
     });
     
+    console.log(`Confluence API response status: ${response.status}`);
+    
+    // Lấy dữ liệu phản hồi dù có lỗi hay không
+    const result = await response.json();
+    
+    // Kiểm tra phản hồi có thành công không
     if (!response.ok) {
+      console.error('Error creating page, response:', result);
       throw new Error(`Failed to create page: ${response.statusText}`);
     }
-    
-    const result = await response.json();
     
     return {
       success: true,
@@ -197,7 +275,7 @@ export async function updatePage(
   pageId: string, 
   title: string, 
   content: string, 
-  version: number
+  version?: number
 ): Promise<ServiceResult<ConfluencePage>> {
   try {
     // Đầu tiên, lấy thông tin trang hiện tại
@@ -208,6 +286,13 @@ export async function updatePage(
     }
     
     const currentPage = pageResult.data;
+    
+    // Đảm bảo sử dụng version mới nhất từ API
+    const currentVersion = currentPage?.version || 1;
+    console.log(`Updating page ${pageId}: provided version=${version}, current version=${currentVersion}`);
+    
+    // Version mới phải tăng 1 so với version hiện tại
+    const newVersion = currentVersion + 1;
     
     const response = await fetch(`${CONFLUENCE_API_BASE}/content/${pageId}`, {
       method: 'PUT',
@@ -220,7 +305,7 @@ export async function updatePage(
         type: 'page',
         title,
         version: {
-          number: version
+          number: newVersion
         },
         body: {
           storage: {
@@ -232,6 +317,12 @@ export async function updatePage(
     });
     
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Error updating page:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: errorData
+      });
       throw new Error(`Failed to update page: ${response.statusText}`);
     }
     

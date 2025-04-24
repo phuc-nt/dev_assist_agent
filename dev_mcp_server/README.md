@@ -6,6 +6,8 @@ DevAssist MCP Server là phần mềm trung gian hoạt động như một Sub-A
 
 MCP Server đóng vai trò là cầu nối giữa Central Agent và hệ thống Atlassian, chuẩn hóa cách thức giao tiếp và đơn giản hóa việc tích hợp với các mô hình AI khác nhau.
 
+Là một Sub-Agent, MCP Server nhận các yêu cầu từ Central Agent, xử lý các yêu cầu này bằng cách gọi API tương ứng của Atlassian, và trả về kết quả theo định dạng chuẩn. Điều này giúp tách biệt trách nhiệm, đơn giản hóa việc triển khai và bảo trì hệ thống, đồng thời cung cấp khả năng mở rộng dễ dàng cho các dịch vụ Atlassian khác trong tương lai.
+
 ## Mục đích
 
 - Tạo giao diện chuẩn hóa để Central Agent tương tác với JIRA và Confluence
@@ -195,6 +197,41 @@ npm run dev
 npm run build
 npm start
 ```
+
+## Kiểm thử
+
+### Kiểm thử đơn vị và tích hợp
+
+```bash
+# Chạy toàn bộ test
+npm test
+
+# Chạy test trong chế độ watch
+npm run test:watch
+```
+
+### Kiểm thử thực tế với Atlassian API
+
+MCP Server có các test thực tế (real integration tests) để kiểm tra kết nối với các API của Atlassian:
+
+1. **Cấu hình Atlassian API**:
+   - Tạo file `.env.test` trong thư mục gốc với nội dung:
+   ```
+   JIRA_API_TOKEN=your_jira_api_token
+   JIRA_EMAIL=your_atlassian_email
+   CONFLUENCE_API_TOKEN=your_confluence_api_token
+   CONFLUENCE_EMAIL=your_atlassian_email
+   ```
+
+2. **Chạy test thực tế**:
+   ```bash
+   npm run test:real
+   ```
+
+Lưu ý:
+- Các test thực tế sẽ tạo ra các task JIRA và trang Confluence thật.
+- Mặc định, các test thực tế được bỏ qua trừ khi có biến môi trường `RUN_REAL_TESTS=true`.
+- URL của các tài nguyên được tạo sẽ hiển thị trong output của test.
 
 ## Mở rộng
 
