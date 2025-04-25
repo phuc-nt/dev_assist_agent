@@ -44,7 +44,7 @@ async function main() {
     });
 
     // Đường dẫn đến MCP server của bạn
-    const serverPath = "/Users/phucnt/Workspace/dev_assist_agent/dev_mcp-server-atlassian/dist/index.js";
+    const serverPath = path.resolve(process.cwd(), "../dev_mcp-server-atlassian/dist/index.js");
 
     // Khởi tạo transport với biến môi trường
     const processEnv: Record<string, string> = {};

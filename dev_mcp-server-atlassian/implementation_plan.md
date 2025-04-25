@@ -82,15 +82,132 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
 - [ ] Tạo CI/CD pipeline
 - [ ] Chuẩn bị tài liệu hướng dẫn triển khai
 
+### Phase 7.1: Chuẩn hóa phương pháp gọi API (Mới)
+- [ ] Chuyển đổi phương pháp gọi API Jira từ SDK jira.js sang sử dụng fetch trực tiếp
+  - [x] Cập nhật hàm getIssue để sử dụng fetch thay vì SDK
+  - [x] Cập nhật hàm searchIssues để sử dụng fetch thay vì SDK
+  - [ ] Cập nhật các hàm Jira còn lại để sử dụng fetch
+- [ ] Đảm bảo tất cả các API calls (cả Jira và Confluence) sử dụng cùng phương pháp
+  - [x] Áp dụng header User-Agent nhất quán
+  - [x] Sử dụng cấu trúc error handling giống nhau
+  - [ ] Chuẩn hóa định dạng response
+- [x] Kiểm thử các API calls
+  - [x] Kiểm thử thành công với getIssue của Jira (Issue XDEMO2-1)
+  - [x] Kiểm thử thành công với getSpaces của Confluence
+- [ ] Viết unit tests cho các phương thức API mới
+- [ ] Tái cấu trúc mã nguồn để mô-đun hóa các hàm gọi API
+
+### Phân tích kỹ thuật: Từ Jira SDK sang fetch trực tiếp (Mới)
+
+#### Vấn đề gặp phải với SDK jira.js:
+1. **Lỗi 501 (Not Implemented)**: hàm `callJiraApi` trong `atlassian-api.ts` chỉ mới được triển khai phần khung nhưng chưa có thực thi cụ thể cho các phương thức của SDK jira.js
+2. **Không nhất quán với Confluence API**: API Confluence sử dụng fetch trực tiếp trong khi Jira sử dụng SDK
+3. **Phụ thuộc vào thư viện bên thứ ba**: Phụ thuộc vào SDK jira.js có thể gây khó khăn khi cần tùy chỉnh, đặc biệt là vấn đề User-Agent
+
+#### Giải pháp đã triển khai:
+1. **Chuyển sang fetch trực tiếp**:
+   - Đã triển khai lại hàm `getIssue` sử dụng fetch trực tiếp thay vì gọi SDK jira.js
+   - Sử dụng cấu trúc tương tự như `callConfluenceApi` để tạo request
+   - Thêm header `User-Agent: MCP-Atlassian-Server/1.0.0` vào mọi request
+
+2. **Cải tiến xử lý lỗi**:
+   - Chuẩn hóa cách xử lý lỗi với mã trạng thái rõ ràng (400, 401, 403, 404...)
+   - Sử dụng ApiError với các loại lỗi định nghĩa rõ ràng (VALIDATION_ERROR, AUTHENTICATION_ERROR...)
+   - Log chi tiết response lỗi từ API để dễ dàng debug
+
+3. **Kết quả kiểm thử**:
+   - **getIssue**: trả về thông tin đầy đủ về issue XDEMO2-1 (tiêu đề, trạng thái, người được gán...)
+   - **getSpaces**: trả về danh sách 4 spaces từ Confluence với đầy đủ thông tin
+
+#### So sánh kết quả response:
+
+**1. Jira Get Issue Result**: 
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "\n# [Web UI] Cung cấp giao diện chat để nhập lệnh\n\n**Key**: XDEMO2-1\n**Type**: Task\n**Status**: Done\n**Priority**: Medium\n**Assignee**: Hung Nguyen\n**Reporter**: Phúc Nguyễn\n**Created**: 3/23/2025, 10:51:57 AM\n**Updated**: 3/23/2025, 11:02:47 AM\n\n## Description\nPhát triển giao diện chat cho phép người dùng nhập lệnh và yêu cầu. Tham chiếu: RF-UI-01\n\n\n"
+  }],
+  "key": "XDEMO2-1",
+  "id": "10005",
+  "summary": "[Web UI] Cung cấp giao diện chat để nhập lệnh",
+  "issueType": "Task",
+  "status": "Done",
+  "priority": "Medium",
+  "assignee": "Hung Nguyen",
+  "reporter": "Phúc Nguyễn",
+  "created": "3/23/2025, 10:51:57 AM",
+  "updated": "3/23/2025, 11:02:47 AM",
+  "description": "Phát triển giao diện chat cho phép người dùng nhập lệnh và yêu cầu. Tham chiếu: RF-UI-01\n\n"
+}
+```
+
+**2. Confluence Get Spaces Result**:
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Tìm thấy 4 space(s)\nHiển thị từ 1 đến 4\n\nduchungbmtd (~5570588c1557f381f64479a006dd5e914a7c11) Loại: personal | Trạng thái: current URL: https://phuc-nt.atlassian.net/spaces/~5570588c1557f381f64479a006dd5e914a7c11\nphuc_nt (~55705824acce7ba0c14f4597f17eb4afd2ff5f) Loại: personal | Trạng thái: current URL: https://phuc-nt.atlassian.net/spaces/~55705824acce7ba0c14f4597f17eb4afd2ff5f\nProject management (PM) Loại: global | Trạng thái: current URL: https://phuc-nt.atlassian.net/spaces/PM\nTeam X (TX) Loại: collaboration | Trạng thái: current URL: https://phuc-nt.atlassian.net/spaces/TX"
+  }],
+  "size": 4,
+  "limit": 25,
+  "start": 0,
+  "spaces": [
+    {
+      "id": 1081346,
+      "key": "~5570588c1557f381f64479a006dd5e914a7c11",
+      "name": "duchungbmtd",
+      "type": "personal",
+      "status": "current",
+      "url": "https://phuc-nt.atlassian.net/spaces/~5570588c1557f381f64479a006dd5e914a7c11"
+    },
+    // ... other spaces
+  ]
+}
+```
+
+#### Hướng phát triển tiếp theo:
+1. **Chuẩn hóa định dạng response**:
+   - Đảm bảo tất cả các tools trả về cấu trúc response thống nhất
+   - Tách biệt rõ ràng giữa phần hiển thị (content) và phần dữ liệu (data)
+   - Thêm các trường metadata như totalResults, pageInfo nếu cần
+
+2. **Tiếp tục chuyển đổi các hàm Jira còn lại**:
+   - Chuyển đổi createIssue, updateIssue, transitionIssue... sang sử dụng fetch
+   - Đảm bảo tất cả đều có cùng phong cách triển khai và xử lý lỗi
+
+3. **Xây dựng hệ thống helper functions**:
+   - Tạo các hàm helper chung để giảm lặp code khi gọi API
+   - Chuẩn hóa quá trình khởi tạo URL, headers và xử lý response
+
+4. **Lưu ý quan trọng cho các triển khai tiếp theo**:
+   - Luôn bao gồm User-Agent trong mọi request để tránh bị Cloudfront chặn
+   - Sử dụng cấu trúc try-catch nhất quán để bắt và xử lý lỗi từ API
+   - Log đầy đủ thông tin request/response để dễ dàng debug
+   - Đảm bảo tính nhất quán trong định dạng dữ liệu trả về
+
 ## Vấn đề đã phát hiện và cần giải quyết
 
 ### Lỗi context.get trong các tool handlers
 - **Mô tả**: Khi gọi các tools từ MCP client, xuất hiện lỗi "context.get is not a function"
-- **Nguyên nhân khả thi**: Phương thức xử lý context trong các tool handlers không phù hợp với cách MCP SDK kết nối
-- **Hướng giải quyết**:
-  - Xem xét lại cách context được truyền và truy xuất trong các tool handlers
-  - Có thể cần cập nhật cách thức khởi tạo context hoặc cách các tool handlers truy cập context
-  - Kiểm tra tính tương thích với phiên bản mới nhất của MCP SDK
+- **Nguyên nhân đã xác định**: 
+  - Phương thức xử lý context trong các tool handlers không phù hợp với cách MCP SDK kết nối
+  - Trong các tool handlers, `context` được truyền vào không phải là một `Map` hoặc đối tượng với phương thức `get`
+  - Trong phiên bản mới của MCP SDK, đối tượng context có thể có cấu trúc khác
+
+- **Giải pháp cần thực hiện**:
+  - Thay đổi cách truy cập context trong các tool handlers:
+    ```typescript
+    // Thay vì
+    const config = context.get('atlassianConfig') as AtlassianConfig;
+    
+    // Sử dụng
+    const config = context.atlassianConfig as AtlassianConfig;
+    // hoặc
+    const config = (context as any).atlassianConfig as AtlassianConfig;
+    ```
+  - Cập nhật lại cách đăng ký context khi khởi tạo MCP Server để phù hợp với SDK mới
+  - Kiểm tra tài liệu MCP SDK mới nhất để xác định cách chính xác truyền và truy cập context
 
 ### Vấn đề kết nối Atlassian API qua MCP Server
 - **Mô tả**: Khi gọi Atlassian API thông qua MCP Server, luôn nhận được lỗi 403 từ Cloudfront, mặc dù gọi trực tiếp từ terminal với cùng credential hoạt động bình thường
@@ -104,19 +221,47 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
   - Lỗi "403 ERROR" từ Cloudfront (không phải từ Atlassian trực tiếp) gợi ý rằng có thể có vấn đề với header hoặc định dạng request
   - Có thể có vấn đề với proxy hoặc cấu hình mạng trung gian
   - Token API có thể bị xử lý không đúng cách (khoảng trắng, ký tự đặc biệt) trong quá trình gửi request
-- **Hướng giải quyết**:
-  1. Sửa hàm `callJiraApi` và `callConfluenceApi`:
-     - Kiểm tra lại cách xử lý xác thực và header
-     - Xem xét việc sử dụng đúng định dạng cho token khi gọi API
-     - Xem xét việc sử dụng axios proxy configs nếu môi trường đang sử dụng proxy
-  2. Thử sử dụng thư viện chính thức của Atlassian:
-     - Thay thế axios bằng client SDK chính thức của Atlassian
-  3. Kiểm tra logs chi tiết hơn:
-     - Thêm log chi tiết hơn về headers và request params
-     - So sánh headers và requests giữa curl trực tiếp và thông qua MCP Server
-  4. Xem xét giới hạn của Cloudfront:
-     - Kiểm tra xem có giới hạn nào về kích thước request hoặc headers
-     - Xem xét việc giảm kích thước header hoặc nén dữ liệu nếu cần
+- **Giải pháp đã thực hiện**:
+  - Phát hiện chính: Khi thêm header User-Agent: MCP-Atlassian-Server/1.0.0 vào request curl, nó hoạt động thành công và trả về dữ liệu
+  - Đã thêm User-Agent vào headers trong hàm createBasicHeaders
+  - Đã chuyển đổi từ SDK jira.js sang sử dụng fetch trực tiếp cho API Jira
+  - Đã áp dụng cùng một cơ chế request cho cả Jira và Confluence API
+
+### Lỗi MODULE_NOT_FOUND khi chạy npm start từ thư mục gốc (Mới)
+- **Mô tả**: Khi chạy lệnh `npm start` từ thư mục gốc của dự án, gặp lỗi "Cannot find module '/Users/phucnt/Workspace/dev_assist_agent/dist/server.js'"
+- **Nguyên nhân**: Lỗi này xảy ra vì file package.json trong thư mục gốc đang tham chiếu đến một đường dẫn không chính xác. Cụ thể:
+  ```json
+  "main": "dist/server.js",
+  "scripts": {
+    "start": "node dist/server.js"
+  }
+  ```
+- **Giải pháp cần thực hiện**:
+  - Cập nhật package.json trong thư mục gốc để tham chiếu đúng đến thư mục dev_mcp-server-atlassian
+  - Hoặc: Luôn chạy server từ thư mục dev_mcp-server-atlassian với lệnh `cd dev_mcp-server-atlassian && npm start`
+  - Đảm bảo rằng các tài liệu hướng dẫn đều chỉ rõ cách chạy server từ thư mục đúng
+
+### So sánh giữa Confluence API và Jira API (Mới)
+- **Phân tích hiện trạng**:
+  - **Confluence API** đang hoạt động tốt vì:
+    - Sử dụng phương thức `fetch` trực tiếp với header `User-Agent` được cấu hình đúng
+    - Đã triển khai đầy đủ logic cho các công cụ như `getSpaces` và `getPage`
+    - Không phụ thuộc vào SDK mà gửi HTTP requests trực tiếp
+    
+  - **Jira API** đang gặp vấn đề vì:
+    - Đang sử dụng SDK `jira.js` (thư viện chính thức)
+    - Trong file `get-issue.ts`, hàm `getIssue` gọi đến hàm `callJiraApi` từ `atlassian-api.js`
+    - Hàm `callJiraApi` chưa được triển khai đầy đủ, dẫn đến lỗi 501 (Not Implemented)
+    
+- **Nguyên nhân chính của lỗi Jira API**:
+  - Vấn đề không liên quan đến `User-Agent` hay header (đã được sửa)
+  - Cần hoàn thiện việc triển khai các hàm gọi API để sử dụng đúng các phương thức của thư viện `jira.js`
+  
+- **Giải pháp đã thực hiện**:
+  - Đã sửa đổi hàm `getIssue` trong file `atlassian-api.ts` để sử dụng fetch trực tiếp thay vì thông qua SDK
+  - Đã sửa đổi hàm `searchIssues` để sử dụng fetch với cùng phương pháp
+  - Đã chuẩn hóa xử lý lỗi và logging giữa các API calls
+  - Đã kiểm thử thành công cả API Jira và Confluence qua MCP test client
 
 ## Chi tiết triển khai các API chính
 
