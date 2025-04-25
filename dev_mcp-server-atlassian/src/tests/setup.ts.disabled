@@ -1,0 +1,9 @@
+// Tạm thời disable file này để tránh lỗi biên dịch
+// import { expect, describe, test, beforeEach, afterEach } from '@jest/globals';
+
+// Cấu hình các global variables cho Jest
+// global.expect = expect;
+// global.test = test;
+// global.describe = describe;
+// global.beforeEach = beforeEach;
+// global.afterEach = afterEach; 
