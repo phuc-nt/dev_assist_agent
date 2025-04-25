@@ -92,6 +92,32 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
   - Có thể cần cập nhật cách thức khởi tạo context hoặc cách các tool handlers truy cập context
   - Kiểm tra tính tương thích với phiên bản mới nhất của MCP SDK
 
+### Vấn đề kết nối Atlassian API qua MCP Server
+- **Mô tả**: Khi gọi Atlassian API thông qua MCP Server, luôn nhận được lỗi 403 từ Cloudfront, mặc dù gọi trực tiếp từ terminal với cùng credential hoạt động bình thường
+- **Những kiểm tra đã thực hiện**:
+  - Đã kiểm tra và xác nhận API token đúng và hoạt động khi gọi trực tiếp từ command line
+  - Đã xác minh domain Atlassian (phuc-nt.atlassian.net) chính xác
+  - Đã xác nhận project XDEMO2 và issue XDEMO2-1 tồn tại và có thể truy cập từ tài khoản phucnt0@gmail.com
+  - Đã xác nhận thông tin Space TX trong Confluence tồn tại và có thể truy cập
+  - Đã kiểm tra biến môi trường trong file .env được tải đúng (ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, ATLASSIAN_API_TOKEN)
+- **Nguyên nhân khả thi**:
+  - Lỗi "403 ERROR" từ Cloudfront (không phải từ Atlassian trực tiếp) gợi ý rằng có thể có vấn đề với header hoặc định dạng request
+  - Có thể có vấn đề với proxy hoặc cấu hình mạng trung gian
+  - Token API có thể bị xử lý không đúng cách (khoảng trắng, ký tự đặc biệt) trong quá trình gửi request
+- **Hướng giải quyết**:
+  1. Sửa hàm `callJiraApi` và `callConfluenceApi`:
+     - Kiểm tra lại cách xử lý xác thực và header
+     - Xem xét việc sử dụng đúng định dạng cho token khi gọi API
+     - Xem xét việc sử dụng axios proxy configs nếu môi trường đang sử dụng proxy
+  2. Thử sử dụng thư viện chính thức của Atlassian:
+     - Thay thế axios bằng client SDK chính thức của Atlassian
+  3. Kiểm tra logs chi tiết hơn:
+     - Thêm log chi tiết hơn về headers và request params
+     - So sánh headers và requests giữa curl trực tiếp và thông qua MCP Server
+  4. Xem xét giới hạn của Cloudfront:
+     - Kiểm tra xem có giới hạn nào về kích thước request hoặc headers
+     - Xem xét việc giảm kích thước header hoặc nén dữ liệu nếu cần
+
 ## Chi tiết triển khai các API chính
 
 ### Jira API

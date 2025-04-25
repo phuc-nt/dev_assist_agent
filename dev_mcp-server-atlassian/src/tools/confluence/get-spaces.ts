@@ -38,6 +38,26 @@ interface GetSpacesResult {
   }>;
 }
 
+// Hàm tạo cấu hình Atlassian từ biến môi trường
+function getAtlassianConfigFromEnv(): AtlassianConfig | null {
+  const siteName = process.env.ATLASSIAN_SITE_NAME;
+  const email = process.env.ATLASSIAN_USER_EMAIL;
+  const apiToken = process.env.ATLASSIAN_API_TOKEN;
+  
+  if (!siteName || !email || !apiToken) {
+    logger.error('Missing Atlassian credentials in environment variables');
+    return null;
+  }
+  
+  logger.info(`Creating Atlassian config from environment variables for site: ${siteName}`);
+  
+  return {
+    baseUrl: `https://${siteName}`,
+    apiToken: apiToken,
+    email: email
+  };
+}
+
 // Hàm xử lý chính để lấy danh sách spaces
 export async function getSpacesHandler(
   params: GetSpacesParams,
@@ -122,15 +142,49 @@ export const registerGetSpacesTool = (server: McpServer) => {
     'getSpaces',
     'Lấy danh sách spaces trong Confluence',
     getSpacesSchema.shape,
-    async (params: GetSpacesParams, context: Record<string, any>): Promise<McpResponse> => {
+    async (params: GetSpacesParams, context: any): Promise<McpResponse> => {
       try {
-        // Lấy cấu hình Atlassian từ context
-        const config = context.get('atlassianConfig') as AtlassianConfig;
+        // Lấy cấu hình từ context
+        const config = context.atlassianConfig;
         
         if (!config) {
-          return createErrorResponse('Cấu hình Atlassian không hợp lệ hoặc không tìm thấy');
+          logger.error('Atlassian configuration not found in context');
+          
+          // Thử lấy cấu hình từ biến môi trường như fallback
+          const envConfig = getAtlassianConfigFromEnv();
+          
+          if (!envConfig) {
+            return createErrorResponse('Cấu hình Atlassian không hợp lệ hoặc không tìm thấy');
+          }
+          
+          logger.info('Using Atlassian configuration from environment variables as fallback');
+          
+          // Lấy danh sách spaces với cấu hình từ môi trường
+          const result = await getSpacesHandler(params, envConfig);
+          
+          // Tạo chuỗi kết quả định dạng theo dạng text
+          const formattedResult = [
+            `Tìm thấy ${result.size} space(s)`,
+            `Hiển thị từ ${result.start + 1} đến ${Math.min(result.start + result.spaces.length, result.size)}`,
+            '',
+            ...result.spaces.map(space => {
+              const description = space.description ? `\n  Mô tả: ${space.description.substring(0, 100)}${space.description.length > 100 ? '...' : ''}` : '';
+              const homepage = space.homepage ? `\n  Trang chủ: ${space.homepage.title} (ID: ${space.homepage.id})` : '';
+              
+              return [
+                `${space.name} (${space.key})`,
+                `  Loại: ${space.type} | Trạng thái: ${space.status}`,
+                `  URL: ${space.url}`,
+                description,
+                homepage
+              ].join('');
+            })
+          ].join('\n');
+          
+          return createTextResponse(formattedResult, result as unknown as Record<string, unknown>);
         }
         
+        // Lấy danh sách spaces với cấu hình từ context
         const result = await getSpacesHandler(params, config);
         
         // Tạo chuỗi kết quả định dạng theo dạng text

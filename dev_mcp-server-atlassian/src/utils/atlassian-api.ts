@@ -12,6 +12,9 @@ export interface AtlassianConfig {
   email: string;
 }
 
+// Khởi tạo logger
+const logger = Logger.getLogger('AtlassianAPI');
+
 /**
  * Hàm tạo các header cơ bản cho API request
  * @param email Email người dùng
@@ -19,7 +22,12 @@ export interface AtlassianConfig {
  * @returns Object chứa các header cơ bản
  */
 const createBasicHeaders = (email: string, apiToken: string) => {
-  const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+  // Loại bỏ khoảng trắng và xuống dòng từ API token
+  const cleanedToken = apiToken.replace(/\s+/g, '');
+  
+  // Luôn sử dụng Basic Authentication theo tài liệu tham khảo API
+  const auth = Buffer.from(`${email}:${cleanedToken}`).toString('base64');
+  
   return {
     'Authorization': `Basic ${auth}`,
     'Content-Type': 'application/json',
@@ -45,7 +53,39 @@ export async function callJiraApi<T>(
 ): Promise<T> {
   try {
     const headers = createBasicHeaders(config.email, config.apiToken);
-    const url = `${config.baseUrl}/rest/api/3${endpoint}`;
+    
+    // Đảm bảo URL đúng định dạng theo tài liệu tham khảo
+    let baseUrl = config.baseUrl;
+    // Xử lý các trường hợp baseUrl
+    if (baseUrl.startsWith('http://')) {
+      baseUrl = baseUrl.replace('http://', 'https://');
+    } else if (!baseUrl.startsWith('https://')) {
+      baseUrl = `https://${baseUrl}`;
+    }
+    
+    // Đảm bảo có .atlassian.net trong URL
+    if (!baseUrl.includes('.atlassian.net')) {
+      baseUrl = `${baseUrl}.atlassian.net`;
+    }
+    
+    // Xử lý trường hợp bị duplicate phần .atlassian.net
+    if (baseUrl.match(/\.atlassian\.net\.atlassian\.net/)) {
+      baseUrl = baseUrl.replace('.atlassian.net.atlassian.net', '.atlassian.net');
+    }
+    
+    // Sử dụng API v2 theo tài liệu tham khảo
+    const url = `${baseUrl}/rest/api/2${endpoint}`;
+    
+    // Log đầy đủ chi tiết để debug
+    logger.debug(`Calling Jira API: ${method} ${url}`);
+    logger.debug(`With Auth: ${config.email}:*****`);
+    logger.debug(`Token length: ${config.apiToken?.length || 0} characters`);
+    
+    // In lệnh curl để debug trực tiếp - theo format của tài liệu API
+    const curlCmd = `curl -X ${method} -H "Content-Type: application/json" -u "${config.email}:${config.apiToken.substring(0, 5)}..." "${url}"${
+      data && (method === 'POST' || method === 'PUT') ? ` -d '${JSON.stringify(data)}'` : ''
+    }`;
+    logger.info(`Debug with curl: ${curlCmd}`);
     
     const response = await axios({
       method,
@@ -60,6 +100,9 @@ export async function callJiraApi<T>(
     if (axios.isAxiosError(error)) {
       const statusCode = error.response?.status || 500;
       const responseData = error.response?.data || {};
+      
+      // Log chi tiết error từ response
+      logger.error(`Jira API error (${statusCode}):`, error.response?.data);
       
       // Xử lý các mã lỗi phổ biến từ Jira API
       if (statusCode === 400) {
@@ -99,7 +142,39 @@ export async function callConfluenceApi<T>(
 ): Promise<T> {
   try {
     const headers = createBasicHeaders(config.email, config.apiToken);
-    const url = `${config.baseUrl}/rest/api${endpoint}`;
+    
+    // Đảm bảo URL đúng định dạng theo tài liệu tham khảo
+    let baseUrl = config.baseUrl;
+    // Xử lý các trường hợp baseUrl
+    if (baseUrl.startsWith('http://')) {
+      baseUrl = baseUrl.replace('http://', 'https://');
+    } else if (!baseUrl.startsWith('https://')) {
+      baseUrl = `https://${baseUrl}`;
+    }
+    
+    // Đảm bảo có .atlassian.net trong URL
+    if (!baseUrl.includes('.atlassian.net')) {
+      baseUrl = `${baseUrl}.atlassian.net`;
+    }
+    
+    // Xử lý trường hợp bị duplicate phần .atlassian.net
+    if (baseUrl.match(/\.atlassian\.net\.atlassian\.net/)) {
+      baseUrl = baseUrl.replace('.atlassian.net.atlassian.net', '.atlassian.net');
+    }
+    
+    // URL API Confluence theo tài liệu
+    const url = `${baseUrl}/wiki/rest/api${endpoint}`;
+    
+    // Log đầy đủ chi tiết để debug
+    logger.debug(`Calling Confluence API: ${method} ${url}`);
+    logger.debug(`With Auth: ${config.email}:*****`);
+    logger.debug(`Token length: ${config.apiToken?.length || 0} characters`);
+    
+    // In lệnh curl để debug trực tiếp - theo format của tài liệu API
+    const curlCmd = `curl -X ${method} -H "Content-Type: application/json" -u "${config.email}:${config.apiToken.substring(0, 5)}..." "${url}"${
+      data && (method === 'POST' || method === 'PUT') ? ` -d '${JSON.stringify(data)}'` : ''
+    }`;
+    logger.info(`Debug with curl: ${curlCmd}`);
     
     const response = await axios({
       method,
@@ -114,6 +189,9 @@ export async function callConfluenceApi<T>(
     if (axios.isAxiosError(error)) {
       const statusCode = error.response?.status || 500;
       const responseData = error.response?.data || {};
+      
+      // Log chi tiết error từ response
+      logger.error(`Confluence API error (${statusCode}):`, error.response?.data);
       
       // Xử lý các mã lỗi phổ biến từ Confluence API
       if (statusCode === 400) {

@@ -32,11 +32,16 @@ if (!ATLASSIAN_SITE_NAME || !ATLASSIAN_USER_EMAIL || !ATLASSIAN_API_TOKEN) {
   process.exit(1);
 }
 
+// Tạo cấu hình Atlassian
 const atlassianConfig: AtlassianConfig = {
-  baseUrl: `https://${ATLASSIAN_SITE_NAME}.atlassian.net`,
-  apiToken: ATLASSIAN_API_TOKEN,
-  email: ATLASSIAN_USER_EMAIL
+  baseUrl: ATLASSIAN_SITE_NAME.includes('.atlassian.net') 
+    ? `https://${ATLASSIAN_SITE_NAME}` 
+    : ATLASSIAN_SITE_NAME,
+  email: ATLASSIAN_USER_EMAIL,
+  apiToken: ATLASSIAN_API_TOKEN
 };
+
+logger.info('Initializing MCP Atlassian Server...');
 
 // Khởi tạo MCP server
 const server = new McpServer({
@@ -44,28 +49,74 @@ const server = new McpServer({
   version: process.env.MCP_SERVER_VERSION || '1.0.0'
 });
 
-// Thiết lập context cho các tool handlers
-const context = new Map<string, any>();
-context.set('atlassianConfig', atlassianConfig);
+// Log thông tin cấu hình để debug
+logger.info(`Atlassian config available: ${JSON.stringify(atlassianConfig, null, 2)}`);
 
-// Đăng ký các tools Jira với hàm xử lý context
-registerGetIssueTool(server);
-registerSearchIssuesTool(server);
-registerCreateIssueTool(server);
-registerUpdateIssueTool(server);
-registerTransitionIssueTool(server);
-registerAssignIssueTool(server);
+// Định nghĩa một hàm wrapper mới để xử lý context
+const wrapToolHandler = (registerToolFn: (server: McpServer) => void) => {
+  // Tạo một server proxy để bắt lệnh đăng ký
+  const proxyServer: any = {
+    tool: (name: string, description: string, schema: any, handler: any) => {
+      // Đăng ký lại tool với handler mới xử lý context
+      server.tool(name, description, schema, async (params: any, context: any) => {
+        logger.debug(`Tool ${name} called with context keys: [${Object.keys(context)}]`);
+        
+        // Kiểm tra context hiện có
+        if (typeof context === 'object') {
+          // Thử debug để xem context có phương thức gì
+          logger.debug(`Context methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(context))}`);
+        }
+        
+        // Truyền cấu hình vào trực tiếp thay vì qua context
+        if (handler.length === 2) { // Nếu handler chấp nhận 2 tham số (params và context)
+          try {
+            // Giả lập context dạng object đơn giản
+            const simpleContext = {
+              atlassianConfig: atlassianConfig,
+              // Thêm các phương thức của context nếu cần
+              get: (key: string) => key === 'atlassianConfig' ? atlassianConfig : undefined,
+              set: (key: string, value: any) => { /* implement if needed */ }
+            };
+            
+            return await handler(params, simpleContext);
+          } catch (error) {
+            logger.error(`Error in wrapped handler for ${name}:`, error);
+            return {
+              content: [{ type: 'text', text: `Error in tool handler: ${error instanceof Error ? error.message : String(error)}` }],
+              isError: true
+            };
+          }
+        } else {
+          logger.error(`Handler for ${name} does not accept expected parameters`);
+          return {
+            content: [{ type: 'text', text: 'Internal server error: invalid handler' }],
+            isError: true
+          };
+        }
+      });
+    }
+  };
+  
+  // Gọi hàm đăng ký với server proxy
+  registerToolFn(proxyServer);
+};
 
-// Đăng ký các tools Confluence
-registerCreatePageTool(server);
-registerGetPageTool(server);
-registerSearchPagesTool(server);
-registerUpdatePageTool(server);
-registerGetSpacesTool(server);
-registerAddCommentTool(server);
+// Đăng ký tất cả các tools với wrapper
+// Jira tools
+wrapToolHandler(registerGetIssueTool);
+wrapToolHandler(registerSearchIssuesTool);
+wrapToolHandler(registerCreateIssueTool);
+wrapToolHandler(registerUpdateIssueTool);
+wrapToolHandler(registerTransitionIssueTool);
+wrapToolHandler(registerAssignIssueTool);
 
-// Log message khi khởi động
-logger.info('Initializing MCP Atlassian Server...');
+// Confluence tools
+wrapToolHandler(registerCreatePageTool);
+wrapToolHandler(registerGetPageTool);
+wrapToolHandler(registerSearchPagesTool);
+wrapToolHandler(registerUpdatePageTool);
+wrapToolHandler(registerGetSpacesTool);
+wrapToolHandler(registerAddCommentTool);
 
 // Khởi động server với STDIO transport
 const transport = new StdioServerTransport();

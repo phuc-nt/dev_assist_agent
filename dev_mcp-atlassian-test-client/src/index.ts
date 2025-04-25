@@ -78,7 +78,7 @@ async function main() {
     const jiraResult = await client.callTool({
       name: "getIssue",
       arguments: {
-        issueIdOrKey: "DEMO-1" // Thay đổi thành một ID issue thực tế trong hệ thống của bạn
+        issueIdOrKey: "XDEMO2-1" // Thay đổi thành một ID issue thực tế trong hệ thống của bạn
       }
     });
     console.log("Jira Get Issue Result:");
