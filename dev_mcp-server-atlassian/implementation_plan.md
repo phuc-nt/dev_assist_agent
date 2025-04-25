@@ -48,30 +48,49 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
 - [x] Xây dựng transport layer (StdioServerTransport)
 - [x] Thiết lập cấu trúc file test e2e
 
-### Phase 6: Tối ưu và Mở rộng
+### Phase 6: Tạo và Kiểm thử MCP Client (New)
+- [x] Tạo cấu trúc dự án client (dev_mcp-atlassian-test-client)
+- [x] Cấu hình TypeScript và dependencies
+- [x] Tạo mô-đun đọc và quản lý biến môi trường
+- [x] Triển khai kết nối StdioClientTransport
+- [x] Thực hiện các lệnh gọi API cơ bản
+- [x] Phát hiện và ghi nhận vấn đề "context.get is not a function"
+- [ ] Sửa lỗi xử lý context trong MCP Server
+
+### Phase 7: Tối ưu và Mở rộng
 - [ ] Tối ưu hóa hiệu suất API calls
 - [ ] Cài đặt caching để giảm số lượng requests
 - [ ] Cải thiện error handling và retry logic
 - [ ] Thêm các authentication methods bổ sung (OAuth)
 - [ ] Cập nhật documentation cho tất cả APIs
 
-### Phase 7: Tích hợp với DevAssist Central Agent
+### Phase 8: Tích hợp với DevAssist Central Agent
 - [ ] Tạo interface giữa MCP Server và Central Agent
 - [ ] Cập nhật mock agents trong Central Agent để sử dụng MCP Server
 - [ ] Viết integration test giữa Central Agent và MCP Server
 - [ ] Cập nhật cấu hình để Central Agent có thể sử dụng MCP Server
 
-### Phase 8: Triển khai Security và Monitoring
+### Phase 9: Triển khai Security và Monitoring
 - [ ] Triển khai rate limiting để tránh quá tải API
 - [ ] Thiết lập monitoring cho API calls
 - [ ] Cài đặt logging cho mọi requests và responses
 - [ ] Thiết lập cơ chế bảo mật cho tokens và credentials
 
-### Phase 9: Dockerization và Deployment
+### Phase 10: Dockerization và Deployment
 - [ ] Tạo Dockerfile
 - [ ] Thiết lập Docker Compose cho môi trường phát triển
 - [ ] Tạo CI/CD pipeline
 - [ ] Chuẩn bị tài liệu hướng dẫn triển khai
+
+## Vấn đề đã phát hiện và cần giải quyết
+
+### Lỗi context.get trong các tool handlers
+- **Mô tả**: Khi gọi các tools từ MCP client, xuất hiện lỗi "context.get is not a function"
+- **Nguyên nhân khả thi**: Phương thức xử lý context trong các tool handlers không phù hợp với cách MCP SDK kết nối
+- **Hướng giải quyết**:
+  - Xem xét lại cách context được truyền và truy xuất trong các tool handlers
+  - Có thể cần cập nhật cách thức khởi tạo context hoặc cách các tool handlers truy cập context
+  - Kiểm tra tính tương thích với phiên bản mới nhất của MCP SDK
 
 ## Chi tiết triển khai các API chính
 
