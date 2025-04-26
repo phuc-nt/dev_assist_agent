@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { callJiraApi, adfToMarkdown } from '../../utils/atlassian-api.js';
+import { searchIssues, adfToMarkdown } from '../../utils/atlassian-api.js';
 import { AtlassianConfig } from '../../utils/atlassian-api.js';
 import { ApiError, ApiErrorType } from '../../utils/error-handler.js';
 import { Logger } from '../../utils/logger.js';
@@ -43,29 +43,15 @@ export async function searchIssuesHandler(
   try {
     logger.info(`Searching issues with JQL: ${params.jql}`);
     
-    // Chuẩn bị tham số cho API call
-    const apiParams = {
-      jql: params.jql,
-      maxResults: params.maxResults,
-      fields: params.fields.join(',')
-    };
-    
-    // Gọi Jira API để tìm kiếm issues
-    const response = await callJiraApi<{
-      total: number;
-      startAt: number;
-      maxResults: number;
-      issues: JiraIssue[];
-    }>(
+    // Gọi hàm searchIssues từ atlassian-api.js
+    const response = await searchIssues(
       config,
-      `/search`,
-      'GET',
-      null,
-      apiParams
+      params.jql,
+      params.maxResults
     );
     
     // Xử lý và trả về kết quả
-    const issues = response.issues.map(issue => ({
+    const issues = response.issues.map((issue: JiraIssue) => ({
       id: issue.id,
       key: issue.key,
       summary: issue.fields.summary,
@@ -104,8 +90,8 @@ export const registerSearchIssuesTool = (server: McpServer) => {
     searchIssuesSchema.shape,
     async (params: SearchIssuesParams, context: Record<string, any>): Promise<McpResponse> => {
       try {
-        // Lấy cấu hình Atlassian từ context (sẽ được truyền vào khi đăng ký tool)
-        const config = context.get('atlassianConfig') as AtlassianConfig;
+        // Lấy cấu hình Atlassian từ context (cập nhật cách truy cập)
+        const config = (context as any).atlassianConfig as AtlassianConfig;
         
         if (!config) {
           return createErrorResponse('Cấu hình Atlassian không hợp lệ hoặc không tìm thấy');

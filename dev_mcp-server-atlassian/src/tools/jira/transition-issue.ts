@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { callJiraApi } from '../../utils/atlassian-api.js';
-import { AtlassianConfig } from '../../utils/atlassian-api.js';
+import { AtlassianConfig, transitionIssue } from '../../utils/atlassian-api.js';
 import { ApiError, ApiErrorType } from '../../utils/error-handler.js';
 import { Logger } from '../../utils/logger.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -33,53 +32,19 @@ export async function transitionIssueHandler(
   try {
     logger.info(`Transitioning issue ${params.issueIdOrKey} with transition ${params.transitionId}`);
     
-    // Chuẩn bị dữ liệu cho API call
-    const requestData: any = {
-      transition: {
-        id: params.transitionId
-      }
-    };
-    
-    // Thêm comment nếu có
-    if (params.comment) {
-      requestData.update = {
-        comment: [
-          {
-            add: {
-              body: {
-                type: 'doc',
-                version: 1,
-                content: [
-                  {
-                    type: 'paragraph',
-                    content: [
-                      {
-                        type: 'text',
-                        text: params.comment
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      };
-    }
-    
-    // Gọi Jira API để thực hiện transition
-    await callJiraApi(
+    // Gọi hàm transitionIssue thay vì callJiraApi
+    const result = await transitionIssue(
       config,
-      `/issue/${params.issueIdOrKey}/transitions`,
-      'POST',
-      requestData
+      params.issueIdOrKey,
+      params.transitionId,
+      params.comment
     );
     
     return {
       issueIdOrKey: params.issueIdOrKey,
-      success: true,
+      success: result.success,
       transitionId: params.transitionId,
-      message: 'Đã chuyển trạng thái issue thành công'
+      message: result.message
     };
   } catch (error) {
     if (error instanceof ApiError) {
@@ -103,8 +68,8 @@ export const registerTransitionIssueTool = (server: McpServer) => {
     transitionIssueSchema.shape,
     async (params: TransitionIssueParams, context: Record<string, any>): Promise<McpResponse> => {
       try {
-        // Lấy cấu hình Atlassian từ context
-        const config = context.get('atlassianConfig') as AtlassianConfig;
+        // Lấy cấu hình Atlassian từ context (cập nhật cách truy cập)
+        const config = (context as any).atlassianConfig as AtlassianConfig;
         
         if (!config) {
           return createErrorResponse('Cấu hình Atlassian không hợp lệ hoặc không tìm thấy');
@@ -117,7 +82,8 @@ export const registerTransitionIssueTool = (server: McpServer) => {
           {
             issueIdOrKey: result.issueIdOrKey,
             transitionId: result.transitionId,
-            success: result.success
+            success: result.success,
+            message: result.message
           }
         );
       } catch (error) {

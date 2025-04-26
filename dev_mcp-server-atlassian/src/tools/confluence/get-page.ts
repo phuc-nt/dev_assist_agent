@@ -141,8 +141,8 @@ export const registerGetPageTool = (server: McpServer) => {
     getPageSchema.shape,
     async (params: GetPageParams, context: Record<string, any>): Promise<McpResponse> => {
       try {
-        // Lấy cấu hình Atlassian từ context
-        const config = context.get('atlassianConfig') as AtlassianConfig;
+        // Lấy cấu hình Atlassian từ context (cập nhật cách truy cập)
+        const config = (context as any).atlassianConfig as AtlassianConfig;
         
         if (!config) {
           return createErrorResponse('Cấu hình Atlassian không hợp lệ hoặc không tìm thấy');
@@ -155,6 +155,7 @@ export const registerGetPageTool = (server: McpServer) => {
           `Tiêu đề: ${result.title}`,
           `Space: ${result.spaceName} (${result.spaceKey})`,
           `ID: ${result.id}`,
+          `URL: ${config.baseUrl}/wiki${result._links.webui}`,
           `Version: ${result.version.number} (cập nhật bởi ${result.version.createdBy} lúc ${result.version.createdAt})`,
           `Trạng thái: ${result.status}`,
           '',

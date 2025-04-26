@@ -97,7 +97,7 @@ export async function getSpacesHandler(
         name: space.name,
         type: space.type,
         status: space.status,
-        url: `${config.baseUrl}/spaces/${space.key}`
+        url: `${config.baseUrl}/wiki/spaces/${space.key}`
       };
       
       // Thêm description nếu có
@@ -144,8 +144,8 @@ export const registerGetSpacesTool = (server: McpServer) => {
     getSpacesSchema.shape,
     async (params: GetSpacesParams, context: any): Promise<McpResponse> => {
       try {
-        // Lấy cấu hình từ context
-        const config = context.atlassianConfig;
+        // Lấy cấu hình từ context (cập nhật cách truy cập)
+        const config = (context as any).atlassianConfig as AtlassianConfig;
         
         if (!config) {
           logger.error('Atlassian configuration not found in context');

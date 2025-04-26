@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { callJiraApi } from '../../utils/atlassian-api.js';
-import { AtlassianConfig } from '../../utils/atlassian-api.js';
+import { AtlassianConfig, updateIssue } from '../../utils/atlassian-api.js';
 import { ApiError, ApiErrorType } from '../../utils/error-handler.js';
 import { Logger } from '../../utils/logger.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -55,38 +54,36 @@ export async function updateIssueHandler(
     logger.info(`Updating issue: ${params.issueIdOrKey}`);
     
     // Chuẩn bị dữ liệu cho API call
-    const requestData: { fields: any } = {
-      fields: {}
-    };
+    const fields: Record<string, any> = {};
     
-    // Thêm các trường cần cập nhật vào requestData
+    // Thêm các trường cần cập nhật vào fields
     if (params.summary) {
-      requestData.fields.summary = params.summary;
+      fields.summary = params.summary;
     }
     
     if (params.description) {
-      requestData.fields.description = textToAdf(params.description);
+      fields.description = textToAdf(params.description);
     }
     
     if (params.priority) {
-      requestData.fields.priority = {
+      fields.priority = {
         name: params.priority
       };
     }
     
     if (params.labels) {
-      requestData.fields.labels = params.labels;
+      fields.labels = params.labels;
     }
     
     // Thêm các trường tùy chỉnh nếu có
     if (params.customFields) {
       Object.entries(params.customFields).forEach(([key, value]) => {
-        requestData.fields[key] = value;
+        fields[key] = value;
       });
     }
     
     // Kiểm tra xem có trường nào cần cập nhật không
-    if (Object.keys(requestData.fields).length === 0) {
+    if (Object.keys(fields).length === 0) {
       return {
         issueIdOrKey: params.issueIdOrKey,
         success: false,
@@ -94,18 +91,17 @@ export async function updateIssueHandler(
       };
     }
     
-    // Gọi Jira API để cập nhật issue
-    await callJiraApi(
+    // Gọi hàm updateIssue thay vì callJiraApi
+    const result = await updateIssue(
       config,
-      `/issue/${params.issueIdOrKey}`,
-      'PUT',
-      requestData
+      params.issueIdOrKey,
+      fields
     );
     
     return {
       issueIdOrKey: params.issueIdOrKey,
-      success: true,
-      message: 'Issue đã được cập nhật thành công'
+      success: result.success,
+      message: result.message
     };
   } catch (error) {
     if (error instanceof ApiError) {
@@ -129,8 +125,8 @@ export const registerUpdateIssueTool = (server: McpServer) => {
     updateIssueSchema.shape,
     async (params: UpdateIssueParams, context: Record<string, any>): Promise<McpResponse> => {
       try {
-        // Lấy cấu hình Atlassian từ context
-        const config = context.get('atlassianConfig') as AtlassianConfig;
+        // Lấy cấu hình Atlassian từ context (sử dụng cách truy cập mới)
+        const config = (context as any).atlassianConfig as AtlassianConfig;
         
         if (!config) {
           return createErrorResponse('Cấu hình Atlassian không hợp lệ hoặc không tìm thấy');
@@ -142,7 +138,8 @@ export const registerUpdateIssueTool = (server: McpServer) => {
           result.message,
           {
             issueIdOrKey: result.issueIdOrKey,
-            success: result.success
+            success: result.success,
+            message: result.message
           }
         );
       } catch (error) {

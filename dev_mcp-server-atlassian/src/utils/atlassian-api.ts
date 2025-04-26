@@ -472,6 +472,442 @@ export async function searchIssues(
 }
 
 /**
+ * Hàm chuẩn hóa baseUrl cho Atlassian API
+ * @param baseUrl URL cơ sở cần chuẩn hóa
+ * @returns URL đã chuẩn hóa
+ */
+export function normalizeAtlassianBaseUrl(baseUrl: string): string {
+  // Chuyển http sang https
+  let normalizedUrl = baseUrl;
+  if (normalizedUrl.startsWith('http://')) {
+    normalizedUrl = normalizedUrl.replace('http://', 'https://');
+  } else if (!normalizedUrl.startsWith('https://')) {
+    normalizedUrl = `https://${normalizedUrl}`;
+  }
+  
+  // Đảm bảo có .atlassian.net trong URL
+  if (!normalizedUrl.includes('.atlassian.net')) {
+    normalizedUrl = `${normalizedUrl}.atlassian.net`;
+  }
+  
+  // Xử lý trường hợp bị duplicate phần .atlassian.net
+  if (normalizedUrl.match(/\.atlassian\.net\.atlassian\.net/)) {
+    normalizedUrl = normalizedUrl.replace('.atlassian.net.atlassian.net', '.atlassian.net');
+  }
+  
+  return normalizedUrl;
+}
+
+/**
+ * Hàm tạo issue mới
+ * @param config Cấu hình Atlassian
+ * @param projectKey Key của project
+ * @param summary Tiêu đề của issue
+ * @param description Mô tả của issue (tùy chọn)
+ * @param issueType Loại issue (mặc định là "Task")
+ * @param additionalFields Các trường bổ sung (tùy chọn)
+ * @returns Thông tin về issue mới tạo
+ */
+export async function createIssue(
+  config: AtlassianConfig,
+  projectKey: string,
+  summary: string,
+  description?: string,
+  issueType: string = "Task",
+  additionalFields: Record<string, any> = {}
+): Promise<any> {
+  try {
+    const headers = createBasicHeaders(config.email, config.apiToken);
+    
+    // Chuẩn hóa baseUrl
+    const baseUrl = normalizeAtlassianBaseUrl(config.baseUrl);
+    
+    // URL API Jira theo tài liệu
+    const url = `${baseUrl}/rest/api/3/issue`;
+    
+    // Chuẩn bị dữ liệu cho request
+    const data: {
+      fields: {
+        project: { key: string };
+        summary: string;
+        issuetype: { name: string };
+        description?: any;
+        [key: string]: any;
+      }
+    } = {
+      fields: {
+        project: {
+          key: projectKey
+        },
+        summary: summary,
+        issuetype: {
+          name: issueType
+        },
+        ...additionalFields
+      }
+    };
+    
+    // Thêm mô tả nếu có
+    if (description) {
+      data.fields.description = {
+        type: 'doc',
+        version: 1,
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'text',
+                text: description
+              }
+            ]
+          }
+        ]
+      };
+    }
+    
+    logger.debug(`Creating issue in project ${projectKey}`);
+    
+    // In lệnh curl để debug trực tiếp
+    const curlCmd = `curl -X POST -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: MCP-Atlassian-Server/1.0.0" -u "${config.email}:${config.apiToken.substring(0, 5)}..." "${url}" -d '${JSON.stringify(data)}'`;
+    logger.info(`Debug with curl: ${curlCmd}`);
+    
+    // Sử dụng fetch
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+      credentials: 'omit'
+    });
+    
+    // Kiểm tra status code
+    if (!response.ok) {
+      const statusCode = response.status;
+      const responseText = await response.text();
+      
+      // Log chi tiết error từ response
+      logger.error(`Jira API error (${statusCode}):`, responseText);
+      
+      // Xử lý các mã lỗi phổ biến từ Jira API
+      if (statusCode === 400) {
+        throw new ApiError(ApiErrorType.VALIDATION_ERROR, 'Dữ liệu issue không hợp lệ', statusCode, new Error(responseText));
+      } else if (statusCode === 401) {
+        throw new ApiError(ApiErrorType.AUTHENTICATION_ERROR, 'Không được ủy quyền. Kiểm tra thông tin xác thực', statusCode, new Error(responseText));
+      } else if (statusCode === 403) {
+        throw new ApiError(ApiErrorType.AUTHORIZATION_ERROR, 'Không có quyền tạo issue', statusCode, new Error(responseText));
+      } else if (statusCode === 429) {
+        throw new ApiError(ApiErrorType.RATE_LIMIT_ERROR, 'Đã vượt quá giới hạn tỉ lệ API', statusCode, new Error(responseText));
+      } else {
+        throw new ApiError(ApiErrorType.SERVER_ERROR, `Lỗi Jira API: ${responseText}`, statusCode, new Error(responseText));
+      }
+    }
+    
+    // Parse JSON
+    const newIssue = await response.json();
+    return newIssue;
+  } catch (error: any) {
+    logger.error(`Error creating issue:`, error);
+    
+    if (error instanceof ApiError) {
+      throw error; // Đã được xử lý ở trên
+    }
+    
+    throw new ApiError(
+      ApiErrorType.UNKNOWN_ERROR,
+      `Lỗi khi tạo issue: ${error instanceof Error ? error.message : String(error)}`,
+      500,
+      error instanceof Error ? error : new Error(String(error))
+    );
+  }
+}
+
+/**
+ * Hàm cập nhật thông tin issue
+ * @param config Cấu hình Atlassian
+ * @param issueIdOrKey ID hoặc key của issue cần cập nhật
+ * @param fields Các trường cần cập nhật
+ * @returns Kết quả cập nhật
+ */
+export async function updateIssue(
+  config: AtlassianConfig,
+  issueIdOrKey: string,
+  fields: Record<string, any>
+): Promise<any> {
+  try {
+    const headers = createBasicHeaders(config.email, config.apiToken);
+    
+    // Chuẩn hóa baseUrl
+    const baseUrl = normalizeAtlassianBaseUrl(config.baseUrl);
+    
+    // URL API Jira theo tài liệu
+    const url = `${baseUrl}/rest/api/3/issue/${issueIdOrKey}`;
+    
+    // Chuẩn bị dữ liệu cho request
+    const data = {
+      fields: fields
+    };
+    
+    logger.debug(`Updating issue ${issueIdOrKey}`);
+    
+    // In lệnh curl để debug trực tiếp
+    const curlCmd = `curl -X PUT -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: MCP-Atlassian-Server/1.0.0" -u "${config.email}:${config.apiToken.substring(0, 5)}..." "${url}" -d '${JSON.stringify(data)}'`;
+    logger.info(`Debug with curl: ${curlCmd}`);
+    
+    // Sử dụng fetch
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(data),
+      credentials: 'omit'
+    });
+    
+    // Kiểm tra status code
+    if (!response.ok) {
+      const statusCode = response.status;
+      const responseText = await response.text();
+      
+      // Log chi tiết error từ response
+      logger.error(`Jira API error (${statusCode}):`, responseText);
+      
+      // Xử lý các mã lỗi phổ biến từ Jira API
+      if (statusCode === 400) {
+        throw new ApiError(ApiErrorType.VALIDATION_ERROR, 'Dữ liệu cập nhật không hợp lệ', statusCode, new Error(responseText));
+      } else if (statusCode === 401) {
+        throw new ApiError(ApiErrorType.AUTHENTICATION_ERROR, 'Không được ủy quyền. Kiểm tra thông tin xác thực', statusCode, new Error(responseText));
+      } else if (statusCode === 403) {
+        throw new ApiError(ApiErrorType.AUTHORIZATION_ERROR, 'Không có quyền cập nhật issue', statusCode, new Error(responseText));
+      } else if (statusCode === 404) {
+        throw new ApiError(ApiErrorType.NOT_FOUND_ERROR, `Issue ${issueIdOrKey} không tồn tại`, statusCode, new Error(responseText));
+      } else if (statusCode === 429) {
+        throw new ApiError(ApiErrorType.RATE_LIMIT_ERROR, 'Đã vượt quá giới hạn tỉ lệ API', statusCode, new Error(responseText));
+      } else {
+        throw new ApiError(ApiErrorType.SERVER_ERROR, `Lỗi Jira API: ${responseText}`, statusCode, new Error(responseText));
+      }
+    }
+    
+    // Trả về rỗng nếu thành công vì API PUT trả về HTTP 204 No Content
+    return { success: true, message: `Issue ${issueIdOrKey} đã được cập nhật thành công` };
+  } catch (error: any) {
+    logger.error(`Error updating issue ${issueIdOrKey}:`, error);
+    
+    if (error instanceof ApiError) {
+      throw error; // Đã được xử lý ở trên
+    }
+    
+    throw new ApiError(
+      ApiErrorType.UNKNOWN_ERROR,
+      `Lỗi khi cập nhật issue: ${error instanceof Error ? error.message : String(error)}`,
+      500,
+      error instanceof Error ? error : new Error(String(error))
+    );
+  }
+}
+
+/**
+ * Hàm chuyển trạng thái của issue
+ * @param config Cấu hình Atlassian
+ * @param issueIdOrKey ID hoặc key của issue
+ * @param transitionId ID của trạng thái muốn chuyển đến
+ * @param comment Bình luận kèm theo (tùy chọn)
+ * @returns Kết quả chuyển trạng thái
+ */
+export async function transitionIssue(
+  config: AtlassianConfig,
+  issueIdOrKey: string,
+  transitionId: string,
+  comment?: string
+): Promise<any> {
+  try {
+    const headers = createBasicHeaders(config.email, config.apiToken);
+    
+    // Chuẩn hóa baseUrl
+    const baseUrl = normalizeAtlassianBaseUrl(config.baseUrl);
+    
+    // URL API Jira theo tài liệu
+    const url = `${baseUrl}/rest/api/3/issue/${issueIdOrKey}/transitions`;
+    
+    // Chuẩn bị dữ liệu cho request
+    const data: any = {
+      transition: {
+        id: transitionId
+      }
+    };
+    
+    // Thêm comment nếu có
+    if (comment) {
+      data.update = {
+        comment: [
+          {
+            add: {
+              body: {
+                type: "doc",
+                version: 1,
+                content: [
+                  {
+                    type: "paragraph",
+                    content: [
+                      {
+                        type: "text",
+                        text: comment
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      };
+    }
+    
+    logger.debug(`Transitioning issue ${issueIdOrKey} to status ID ${transitionId}`);
+    
+    // In lệnh curl để debug trực tiếp
+    const curlCmd = `curl -X POST -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: MCP-Atlassian-Server/1.0.0" -u "${config.email}:${config.apiToken.substring(0, 5)}..." "${url}" -d '${JSON.stringify(data)}'`;
+    logger.info(`Debug with curl: ${curlCmd}`);
+    
+    // Sử dụng fetch
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+      credentials: 'omit'
+    });
+    
+    // Kiểm tra status code
+    if (!response.ok) {
+      const statusCode = response.status;
+      const responseText = await response.text();
+      
+      // Log chi tiết error từ response
+      logger.error(`Jira API error (${statusCode}):`, responseText);
+      
+      // Xử lý các mã lỗi phổ biến từ Jira API
+      if (statusCode === 400) {
+        throw new ApiError(ApiErrorType.VALIDATION_ERROR, 'Transition ID không hợp lệ hoặc không áp dụng được', statusCode, new Error(responseText));
+      } else if (statusCode === 401) {
+        throw new ApiError(ApiErrorType.AUTHENTICATION_ERROR, 'Không được ủy quyền. Kiểm tra thông tin xác thực', statusCode, new Error(responseText));
+      } else if (statusCode === 403) {
+        throw new ApiError(ApiErrorType.AUTHORIZATION_ERROR, 'Không có quyền chuyển trạng thái issue', statusCode, new Error(responseText));
+      } else if (statusCode === 404) {
+        throw new ApiError(ApiErrorType.NOT_FOUND_ERROR, `Issue ${issueIdOrKey} không tồn tại`, statusCode, new Error(responseText));
+      } else if (statusCode === 429) {
+        throw new ApiError(ApiErrorType.RATE_LIMIT_ERROR, 'Đã vượt quá giới hạn tỉ lệ API', statusCode, new Error(responseText));
+      } else {
+        throw new ApiError(ApiErrorType.SERVER_ERROR, `Lỗi Jira API: ${responseText}`, statusCode, new Error(responseText));
+      }
+    }
+    
+    // Trả về kết quả thành công vì API POST transitions trả về HTTP 204 No Content
+    return { 
+      success: true, 
+      message: `Issue ${issueIdOrKey} đã được chuyển trạng thái thành công`,
+      transitionId
+    };
+  } catch (error: any) {
+    logger.error(`Error transitioning issue ${issueIdOrKey}:`, error);
+    
+    if (error instanceof ApiError) {
+      throw error; // Đã được xử lý ở trên
+    }
+    
+    throw new ApiError(
+      ApiErrorType.UNKNOWN_ERROR,
+      `Lỗi khi chuyển trạng thái issue: ${error instanceof Error ? error.message : String(error)}`,
+      500,
+      error instanceof Error ? error : new Error(String(error))
+    );
+  }
+}
+
+/**
+ * Hàm gán issue cho người dùng
+ * @param config Cấu hình Atlassian
+ * @param issueIdOrKey ID hoặc key của issue
+ * @param accountId ID tài khoản của người được gán (null để bỏ gán)
+ * @returns Kết quả gán issue
+ */
+export async function assignIssue(
+  config: AtlassianConfig,
+  issueIdOrKey: string,
+  accountId: string | null
+): Promise<any> {
+  try {
+    const headers = createBasicHeaders(config.email, config.apiToken);
+    
+    // Chuẩn hóa baseUrl
+    const baseUrl = normalizeAtlassianBaseUrl(config.baseUrl);
+    
+    // URL API Jira theo tài liệu
+    const url = `${baseUrl}/rest/api/3/issue/${issueIdOrKey}/assignee`;
+    
+    // Chuẩn bị dữ liệu cho request
+    const data = {
+      accountId: accountId
+    };
+    
+    logger.debug(`Assigning issue ${issueIdOrKey} to account ID ${accountId || 'UNASSIGNED'}`);
+    
+    // In lệnh curl để debug trực tiếp
+    const curlCmd = `curl -X PUT -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: MCP-Atlassian-Server/1.0.0" -u "${config.email}:${config.apiToken.substring(0, 5)}..." "${url}" -d '${JSON.stringify(data)}'`;
+    logger.info(`Debug with curl: ${curlCmd}`);
+    
+    // Sử dụng fetch
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(data),
+      credentials: 'omit'
+    });
+    
+    // Kiểm tra status code
+    if (!response.ok) {
+      const statusCode = response.status;
+      const responseText = await response.text();
+      
+      // Log chi tiết error từ response
+      logger.error(`Jira API error (${statusCode}):`, responseText);
+      
+      // Xử lý các mã lỗi phổ biến từ Jira API
+      if (statusCode === 400) {
+        throw new ApiError(ApiErrorType.VALIDATION_ERROR, 'Dữ liệu không hợp lệ', statusCode, new Error(responseText));
+      } else if (statusCode === 401) {
+        throw new ApiError(ApiErrorType.AUTHENTICATION_ERROR, 'Không được ủy quyền. Kiểm tra thông tin xác thực', statusCode, new Error(responseText));
+      } else if (statusCode === 403) {
+        throw new ApiError(ApiErrorType.AUTHORIZATION_ERROR, 'Không có quyền gán issue', statusCode, new Error(responseText));
+      } else if (statusCode === 404) {
+        throw new ApiError(ApiErrorType.NOT_FOUND_ERROR, `Issue ${issueIdOrKey} không tồn tại`, statusCode, new Error(responseText));
+      } else if (statusCode === 429) {
+        throw new ApiError(ApiErrorType.RATE_LIMIT_ERROR, 'Đã vượt quá giới hạn tỉ lệ API', statusCode, new Error(responseText));
+      } else {
+        throw new ApiError(ApiErrorType.SERVER_ERROR, `Lỗi Jira API: ${responseText}`, statusCode, new Error(responseText));
+      }
+    }
+    
+    // Trả về kết quả thành công vì API PUT assignee trả về HTTP 204 No Content
+    return { 
+      success: true, 
+      message: accountId 
+        ? `Issue ${issueIdOrKey} đã được gán cho người dùng thành công` 
+        : `Issue ${issueIdOrKey} đã được bỏ gán thành công`
+    };
+  } catch (error: any) {
+    logger.error(`Error assigning issue ${issueIdOrKey}:`, error);
+    
+    if (error instanceof ApiError) {
+      throw error; // Đã được xử lý ở trên
+    }
+    
+    throw new ApiError(
+      ApiErrorType.UNKNOWN_ERROR,
+      `Lỗi khi gán issue: ${error instanceof Error ? error.message : String(error)}`,
+      500,
+      error instanceof Error ? error : new Error(String(error))
+    );
+  }
+}
+
+/**
  * Hàm chuyển đổi Atlassian Document Format sang Markdown đơn giản
  * @param content Nội dung ADF
  * @returns Chuỗi Markdown

@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { callJiraApi } from '../../utils/atlassian-api.js';
-import { AtlassianConfig } from '../../utils/atlassian-api.js';
+import { AtlassianConfig, assignIssue } from '../../utils/atlassian-api.js';
 import { ApiError, ApiErrorType } from '../../utils/error-handler.js';
 import { Logger } from '../../utils/logger.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -30,23 +29,19 @@ export async function assignIssueHandler(
   config: AtlassianConfig
 ): Promise<AssignIssueResult> {
   try {
-    // Chuẩn bị dữ liệu cho API call
-    const requestData = params.accountId ? { accountId: params.accountId } : { accountId: null };
-    
     logger.info(`Assigning issue ${params.issueIdOrKey} to ${params.accountId || 'no one'}`);
     
-    // Gọi Jira API để gán issue
-    await callJiraApi(
+    // Gọi hàm assignIssue thay vì callJiraApi
+    const result = await assignIssue(
       config,
-      `/issue/${params.issueIdOrKey}/assignee`,
-      'PUT',
-      requestData
+      params.issueIdOrKey,
+      params.accountId || null
     );
     
     // Trả về kết quả
     return {
       issueIdOrKey: params.issueIdOrKey,
-      success: true,
+      success: result.success,
       assignee: params.accountId || null,
       message: params.accountId 
         ? `Đã gán issue ${params.issueIdOrKey} cho người dùng có account ID: ${params.accountId}`
@@ -74,8 +69,8 @@ export const registerAssignIssueTool = (server: McpServer) => {
     assignIssueSchema.shape,
     async (params: AssignIssueParams, context: Record<string, any>): Promise<McpResponse> => {
       try {
-        // Lấy cấu hình Atlassian từ context
-        const config = context.get('atlassianConfig') as AtlassianConfig;
+        // Lấy cấu hình Atlassian từ context (cập nhật cách truy cập)
+        const config = (context as any).atlassianConfig as AtlassianConfig;
         
         if (!config) {
           return createErrorResponse('Cấu hình Atlassian không hợp lệ hoặc không tìm thấy');
@@ -88,7 +83,8 @@ export const registerAssignIssueTool = (server: McpServer) => {
           {
             issueIdOrKey: result.issueIdOrKey,
             assignee: result.assignee,
-            success: result.success
+            success: result.success,
+            message: result.message
           }
         );
       } catch (error) {

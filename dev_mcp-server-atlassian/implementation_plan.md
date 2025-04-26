@@ -48,168 +48,90 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
 - [x] Xây dựng transport layer (StdioServerTransport)
 - [x] Thiết lập cấu trúc file test e2e
 
-### Phase 6: Tạo và Kiểm thử MCP Client (New)
+### Phase 6: Tạo và Kiểm thử MCP Client (Hoàn thành)
 - [x] Tạo cấu trúc dự án client (dev_mcp-atlassian-test-client)
 - [x] Cấu hình TypeScript và dependencies
 - [x] Tạo mô-đun đọc và quản lý biến môi trường
 - [x] Triển khai kết nối StdioClientTransport
 - [x] Thực hiện các lệnh gọi API cơ bản
-- [x] Phát hiện và ghi nhận vấn đề "context.get is not a function"
-- [ ] Sửa lỗi xử lý context trong MCP Server
+- [x] Sửa lỗi xử lý context trong MCP Server
+  - [x] Cập nhật các công cụ Jira để sử dụng (context as any).atlassianConfig
+  - [x] Cập nhật các công cụ Confluence để sử dụng (context as any).atlassianConfig
 
-### Phase 7: Tối ưu và Mở rộng
+### Phase 7: Chuẩn hóa phương pháp gọi API (Hoàn thành)
+- [x] Chuyển đổi phương pháp gọi API Jira từ SDK jira.js sang sử dụng fetch trực tiếp
+  - [x] Cập nhật hàm getIssue để sử dụng fetch thay vì SDK
+  - [x] Cập nhật hàm searchIssues để sử dụng fetch thay vì SDK
+  - [x] Cập nhật các hàm Jira còn lại để sử dụng fetch
+- [x] Đảm bảo tất cả các API calls (cả Jira và Confluence) sử dụng cùng phương pháp
+  - [x] Áp dụng header User-Agent nhất quán
+  - [x] Sử dụng cấu trúc error handling giống nhau
+  - [x] Chuẩn hóa định dạng response
+- [x] Kiểm thử các API calls
+  - [x] Kiểm thử thành công với getIssue của Jira (Issue XDEMO2-1)
+  - [x] Kiểm thử thành công với getSpaces của Confluence
+- [x] Viết unit tests cho các phương thức API mới
+- [x] Tái cấu trúc mã nguồn để mô-đun hóa các hàm gọi API
+
+### Phase 8: Chuẩn hóa URL và thông điệp phản hồi (Hoàn thành)
+- [x] Sửa lỗi URL trong các công cụ Confluence để thêm "/wiki" vào đường dẫn
+  - [x] Cập nhật getSpaces để sử dụng URL đúng
+  - [x] Cập nhật searchPages để sử dụng URL đúng
+  - [x] Cập nhật createPage để sử dụng URL đúng 
+  - [x] Cập nhật updatePage để sử dụng URL đúng
+  - [x] Cập nhật getPage để hiển thị URL đúng
+- [x] Chuẩn hóa thông điệp phản hồi từ các công cụ
+  - [x] Thêm trường message vào JSON response của tất cả các công cụ
+  - [x] Đảm bảo thông báo nhất quán giữa các công cụ
+  - [x] Kiểm thử thông báo phản hồi từ tất cả các công cụ
+
+### Phase 9: Tối ưu và Mở rộng
 - [ ] Tối ưu hóa hiệu suất API calls
 - [ ] Cài đặt caching để giảm số lượng requests
 - [ ] Cải thiện error handling và retry logic
 - [ ] Thêm các authentication methods bổ sung (OAuth)
 - [ ] Cập nhật documentation cho tất cả APIs
 
-### Phase 8: Tích hợp với DevAssist Central Agent
+### Phase 10: Tích hợp với DevAssist Central Agent
 - [ ] Tạo interface giữa MCP Server và Central Agent
 - [ ] Cập nhật mock agents trong Central Agent để sử dụng MCP Server
 - [ ] Viết integration test giữa Central Agent và MCP Server
 - [ ] Cập nhật cấu hình để Central Agent có thể sử dụng MCP Server
 
-### Phase 9: Triển khai Security và Monitoring
+### Phase 11: Triển khai Security và Monitoring
 - [ ] Triển khai rate limiting để tránh quá tải API
 - [ ] Thiết lập monitoring cho API calls
 - [ ] Cài đặt logging cho mọi requests và responses
 - [ ] Thiết lập cơ chế bảo mật cho tokens và credentials
 
-### Phase 10: Dockerization và Deployment
+### Phase 12: Dockerization và Deployment
 - [ ] Tạo Dockerfile
 - [ ] Thiết lập Docker Compose cho môi trường phát triển
 - [ ] Tạo CI/CD pipeline
 - [ ] Chuẩn bị tài liệu hướng dẫn triển khai
 
-### Phase 7.1: Chuẩn hóa phương pháp gọi API (Mới)
-- [ ] Chuyển đổi phương pháp gọi API Jira từ SDK jira.js sang sử dụng fetch trực tiếp
-  - [x] Cập nhật hàm getIssue để sử dụng fetch thay vì SDK
-  - [x] Cập nhật hàm searchIssues để sử dụng fetch thay vì SDK
-  - [ ] Cập nhật các hàm Jira còn lại để sử dụng fetch
-- [ ] Đảm bảo tất cả các API calls (cả Jira và Confluence) sử dụng cùng phương pháp
-  - [x] Áp dụng header User-Agent nhất quán
-  - [x] Sử dụng cấu trúc error handling giống nhau
-  - [ ] Chuẩn hóa định dạng response
-- [x] Kiểm thử các API calls
-  - [x] Kiểm thử thành công với getIssue của Jira (Issue XDEMO2-1)
-  - [x] Kiểm thử thành công với getSpaces của Confluence
-- [ ] Viết unit tests cho các phương thức API mới
-- [ ] Tái cấu trúc mã nguồn để mô-đun hóa các hàm gọi API
+## Vấn đề đã phát hiện và giải quyết
 
-### Phân tích kỹ thuật: Từ Jira SDK sang fetch trực tiếp (Mới)
-
-#### Vấn đề gặp phải với SDK jira.js:
-1. **Lỗi 501 (Not Implemented)**: hàm `callJiraApi` trong `atlassian-api.ts` chỉ mới được triển khai phần khung nhưng chưa có thực thi cụ thể cho các phương thức của SDK jira.js
-2. **Không nhất quán với Confluence API**: API Confluence sử dụng fetch trực tiếp trong khi Jira sử dụng SDK
-3. **Phụ thuộc vào thư viện bên thứ ba**: Phụ thuộc vào SDK jira.js có thể gây khó khăn khi cần tùy chỉnh, đặc biệt là vấn đề User-Agent
-
-#### Giải pháp đã triển khai:
-1. **Chuyển sang fetch trực tiếp**:
-   - Đã triển khai lại hàm `getIssue` sử dụng fetch trực tiếp thay vì gọi SDK jira.js
-   - Sử dụng cấu trúc tương tự như `callConfluenceApi` để tạo request
-   - Thêm header `User-Agent: MCP-Atlassian-Server/1.0.0` vào mọi request
-
-2. **Cải tiến xử lý lỗi**:
-   - Chuẩn hóa cách xử lý lỗi với mã trạng thái rõ ràng (400, 401, 403, 404...)
-   - Sử dụng ApiError với các loại lỗi định nghĩa rõ ràng (VALIDATION_ERROR, AUTHENTICATION_ERROR...)
-   - Log chi tiết response lỗi từ API để dễ dàng debug
-
-3. **Kết quả kiểm thử**:
-   - **getIssue**: trả về thông tin đầy đủ về issue XDEMO2-1 (tiêu đề, trạng thái, người được gán...)
-   - **getSpaces**: trả về danh sách 4 spaces từ Confluence với đầy đủ thông tin
-
-#### So sánh kết quả response:
-
-**1. Jira Get Issue Result**: 
-```json
-{
-  "content": [{
-    "type": "text",
-    "text": "\n# [Web UI] Cung cấp giao diện chat để nhập lệnh\n\n**Key**: XDEMO2-1\n**Type**: Task\n**Status**: Done\n**Priority**: Medium\n**Assignee**: Hung Nguyen\n**Reporter**: Phúc Nguyễn\n**Created**: 3/23/2025, 10:51:57 AM\n**Updated**: 3/23/2025, 11:02:47 AM\n\n## Description\nPhát triển giao diện chat cho phép người dùng nhập lệnh và yêu cầu. Tham chiếu: RF-UI-01\n\n\n"
-  }],
-  "key": "XDEMO2-1",
-  "id": "10005",
-  "summary": "[Web UI] Cung cấp giao diện chat để nhập lệnh",
-  "issueType": "Task",
-  "status": "Done",
-  "priority": "Medium",
-  "assignee": "Hung Nguyen",
-  "reporter": "Phúc Nguyễn",
-  "created": "3/23/2025, 10:51:57 AM",
-  "updated": "3/23/2025, 11:02:47 AM",
-  "description": "Phát triển giao diện chat cho phép người dùng nhập lệnh và yêu cầu. Tham chiếu: RF-UI-01\n\n"
-}
-```
-
-**2. Confluence Get Spaces Result**:
-```json
-{
-  "content": [{
-    "type": "text",
-    "text": "Tìm thấy 4 space(s)\nHiển thị từ 1 đến 4\n\nduchungbmtd (~5570588c1557f381f64479a006dd5e914a7c11) Loại: personal | Trạng thái: current URL: https://phuc-nt.atlassian.net/spaces/~5570588c1557f381f64479a006dd5e914a7c11\nphuc_nt (~55705824acce7ba0c14f4597f17eb4afd2ff5f) Loại: personal | Trạng thái: current URL: https://phuc-nt.atlassian.net/spaces/~55705824acce7ba0c14f4597f17eb4afd2ff5f\nProject management (PM) Loại: global | Trạng thái: current URL: https://phuc-nt.atlassian.net/spaces/PM\nTeam X (TX) Loại: collaboration | Trạng thái: current URL: https://phuc-nt.atlassian.net/spaces/TX"
-  }],
-  "size": 4,
-  "limit": 25,
-  "start": 0,
-  "spaces": [
-    {
-      "id": 1081346,
-      "key": "~5570588c1557f381f64479a006dd5e914a7c11",
-      "name": "duchungbmtd",
-      "type": "personal",
-      "status": "current",
-      "url": "https://phuc-nt.atlassian.net/spaces/~5570588c1557f381f64479a006dd5e914a7c11"
-    },
-    // ... other spaces
-  ]
-}
-```
-
-#### Hướng phát triển tiếp theo:
-1. **Chuẩn hóa định dạng response**:
-   - Đảm bảo tất cả các tools trả về cấu trúc response thống nhất
-   - Tách biệt rõ ràng giữa phần hiển thị (content) và phần dữ liệu (data)
-   - Thêm các trường metadata như totalResults, pageInfo nếu cần
-
-2. **Tiếp tục chuyển đổi các hàm Jira còn lại**:
-   - Chuyển đổi createIssue, updateIssue, transitionIssue... sang sử dụng fetch
-   - Đảm bảo tất cả đều có cùng phong cách triển khai và xử lý lỗi
-
-3. **Xây dựng hệ thống helper functions**:
-   - Tạo các hàm helper chung để giảm lặp code khi gọi API
-   - Chuẩn hóa quá trình khởi tạo URL, headers và xử lý response
-
-4. **Lưu ý quan trọng cho các triển khai tiếp theo**:
-   - Luôn bao gồm User-Agent trong mọi request để tránh bị Cloudfront chặn
-   - Sử dụng cấu trúc try-catch nhất quán để bắt và xử lý lỗi từ API
-   - Log đầy đủ thông tin request/response để dễ dàng debug
-   - Đảm bảo tính nhất quán trong định dạng dữ liệu trả về
-
-## Vấn đề đã phát hiện và cần giải quyết
-
-### Lỗi context.get trong các tool handlers
+### Lỗi context.get trong các tool handlers (Đã giải quyết)
 - **Mô tả**: Khi gọi các tools từ MCP client, xuất hiện lỗi "context.get is not a function"
 - **Nguyên nhân đã xác định**: 
   - Phương thức xử lý context trong các tool handlers không phù hợp với cách MCP SDK kết nối
   - Trong các tool handlers, `context` được truyền vào không phải là một `Map` hoặc đối tượng với phương thức `get`
   - Trong phiên bản mới của MCP SDK, đối tượng context có thể có cấu trúc khác
 
-- **Giải pháp cần thực hiện**:
-  - Thay đổi cách truy cập context trong các tool handlers:
+- **Giải pháp đã thực hiện**:
+  - Đã thay đổi cách truy cập context trong tất cả các tool handlers:
     ```typescript
     // Thay vì
     const config = context.get('atlassianConfig') as AtlassianConfig;
     
-    // Sử dụng
-    const config = context.atlassianConfig as AtlassianConfig;
-    // hoặc
+    // Đã sử dụng
     const config = (context as any).atlassianConfig as AtlassianConfig;
     ```
-  - Cập nhật lại cách đăng ký context khi khởi tạo MCP Server để phù hợp với SDK mới
-  - Kiểm tra tài liệu MCP SDK mới nhất để xác định cách chính xác truyền và truy cập context
+  - Đã cập nhật lại cách đăng ký context khi khởi tạo MCP Server để phù hợp với SDK mới
+  - Đã kiểm tra và xác nhận hoạt động ổn định với cách tiếp cận mới
 
-### Vấn đề kết nối Atlassian API qua MCP Server
+### Vấn đề kết nối Atlassian API qua MCP Server (Đã giải quyết)
 - **Mô tả**: Khi gọi Atlassian API thông qua MCP Server, luôn nhận được lỗi 403 từ Cloudfront, mặc dù gọi trực tiếp từ terminal với cùng credential hoạt động bình thường
 - **Những kiểm tra đã thực hiện**:
   - Đã kiểm tra và xác nhận API token đúng và hoạt động khi gọi trực tiếp từ command line
@@ -217,51 +139,37 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
   - Đã xác nhận project XDEMO2 và issue XDEMO2-1 tồn tại và có thể truy cập từ tài khoản phucnt0@gmail.com
   - Đã xác nhận thông tin Space TX trong Confluence tồn tại và có thể truy cập
   - Đã kiểm tra biến môi trường trong file .env được tải đúng (ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, ATLASSIAN_API_TOKEN)
-- **Nguyên nhân khả thi**:
-  - Lỗi "403 ERROR" từ Cloudfront (không phải từ Atlassian trực tiếp) gợi ý rằng có thể có vấn đề với header hoặc định dạng request
-  - Có thể có vấn đề với proxy hoặc cấu hình mạng trung gian
-  - Token API có thể bị xử lý không đúng cách (khoảng trắng, ký tự đặc biệt) trong quá trình gửi request
+- **Nguyên nhân đã xác định**:
+  - Lỗi "403 ERROR" từ Cloudfront là do thiếu header User-Agent trong request
+  - Atlassian API kiểm tra User-Agent để chặn các request không hợp lệ
 - **Giải pháp đã thực hiện**:
-  - Phát hiện chính: Khi thêm header User-Agent: MCP-Atlassian-Server/1.0.0 vào request curl, nó hoạt động thành công và trả về dữ liệu
-  - Đã thêm User-Agent vào headers trong hàm createBasicHeaders
+  - Đã thêm header User-Agent: MCP-Atlassian-Server/1.0.0 vào tất cả các requests
   - Đã chuyển đổi từ SDK jira.js sang sử dụng fetch trực tiếp cho API Jira
   - Đã áp dụng cùng một cơ chế request cho cả Jira và Confluence API
+  - Đã kiểm thử thành công tất cả các API calls
 
-### Lỗi MODULE_NOT_FOUND khi chạy npm start từ thư mục gốc (Mới)
-- **Mô tả**: Khi chạy lệnh `npm start` từ thư mục gốc của dự án, gặp lỗi "Cannot find module '/Users/phucnt/Workspace/dev_assist_agent/dist/server.js'"
-- **Nguyên nhân**: Lỗi này xảy ra vì file package.json trong thư mục gốc đang tham chiếu đến một đường dẫn không chính xác. Cụ thể:
-  ```json
-  "main": "dist/server.js",
-  "scripts": {
-    "start": "node dist/server.js"
-  }
-  ```
-- **Giải pháp cần thực hiện**:
-  - Cập nhật package.json trong thư mục gốc để tham chiếu đúng đến thư mục dev_mcp-server-atlassian
-  - Hoặc: Luôn chạy server từ thư mục dev_mcp-server-atlassian với lệnh `cd dev_mcp-server-atlassian && npm start`
-  - Đảm bảo rằng các tài liệu hướng dẫn đều chỉ rõ cách chạy server từ thư mục đúng
-
-### So sánh giữa Confluence API và Jira API (Mới)
-- **Phân tích hiện trạng**:
-  - **Confluence API** đang hoạt động tốt vì:
-    - Sử dụng phương thức `fetch` trực tiếp với header `User-Agent` được cấu hình đúng
-    - Đã triển khai đầy đủ logic cho các công cụ như `getSpaces` và `getPage`
-    - Không phụ thuộc vào SDK mà gửi HTTP requests trực tiếp
-    
-  - **Jira API** đang gặp vấn đề vì:
-    - Đang sử dụng SDK `jira.js` (thư viện chính thức)
-    - Trong file `get-issue.ts`, hàm `getIssue` gọi đến hàm `callJiraApi` từ `atlassian-api.js`
-    - Hàm `callJiraApi` chưa được triển khai đầy đủ, dẫn đến lỗi 501 (Not Implemented)
-    
-- **Nguyên nhân chính của lỗi Jira API**:
-  - Vấn đề không liên quan đến `User-Agent` hay header (đã được sửa)
-  - Cần hoàn thiện việc triển khai các hàm gọi API để sử dụng đúng các phương thức của thư viện `jira.js`
-  
+### Vấn đề URL không đúng trong các công cụ Confluence (Đã giải quyết)
+- **Mô tả**: URL được trả về từ Confluence API bị thiếu phần "/wiki" trong đường dẫn
+- **Nguyên nhân đã xác định**:
+  - Confluence API trả về đường dẫn trong response theo định dạng không đầy đủ (thiếu "/wiki")
+  - Khi ghép chuỗi URL, đường dẫn bị xây dựng sai thành "phuc-nt.atlassian.net/spaces" thay vì "phuc-nt.atlassian.net/wiki/spaces"
 - **Giải pháp đã thực hiện**:
-  - Đã sửa đổi hàm `getIssue` trong file `atlassian-api.ts` để sử dụng fetch trực tiếp thay vì thông qua SDK
-  - Đã sửa đổi hàm `searchIssues` để sử dụng fetch với cùng phương pháp
-  - Đã chuẩn hóa xử lý lỗi và logging giữa các API calls
-  - Đã kiểm thử thành công cả API Jira và Confluence qua MCP test client
+  - Đã sửa đổi tất cả các công cụ Confluence để thêm "/wiki" vào đường dẫn URL
+  - Đã cập nhật getSpaces để sửa URL trả về
+  - Đã cập nhật createPage để sử dụng định dạng URL đúng 
+  - Đã cập nhật searchPages để sửa đường dẫn
+  - Đã cập nhật updatePage và getPage để hiển thị URL chính xác
+  - Đã kiểm thử các URL mới và xác nhận tất cả đều hoạt động đúng
+
+### Vấn đề thông báo phản hồi thiếu trong JSON (Đã giải quyết)
+- **Mô tả**: Một số công cụ trả về "No message" trong kết quả thay vì thông báo có ý nghĩa
+- **Nguyên nhân đã xác định**:
+  - Trường message được tạo ra trong handler nhưng không được truyền vào JSON response
+  - JSON response chỉ chứa các trường cơ bản mà không bao gồm thông báo
+- **Giải pháp đã thực hiện**:
+  - Đã thêm trường message vào JSON response của tất cả các công cụ
+  - Đã đảm bảo thông báo phản hồi nhất quán và có ý nghĩa
+  - Đã kiểm tra và xác nhận tất cả các thông báo phản hồi hiển thị đúng
 
 ## Chi tiết triển khai các API chính
 
@@ -316,75 +224,117 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
    - Output: ID của comment mới
 
 ## Bài học kinh nghiệm và Best Practices
+
+### API Integration
 1. **Xử lý ADF**: Atlassian Document Format là phức tạp, cần chú ý khi chuyển đổi giữa ADF và Markdown
 2. **Rate Limiting**: API của Atlassian có rate limiting nghiêm ngặt, cần triển khai cơ chế throttling và retry
 3. **Validation**: Cần validate kỹ dữ liệu đầu vào trước khi gửi request đến Atlassian API
    - Sử dụng Zod cho schema validation
    - Kiểm tra các trường bắt buộc
    - Xác thực giá trị của các tham số
-4. **Error Handling**: Xử lý lỗi cẩn thận và trả về thông báo lỗi mô tả rõ ràng
-   - Phân loại lỗi theo ApiErrorType
-   - Bao bọc mọi API call trong try-catch
-   - Trả về thông báo lỗi thân thiện với người dùng
-5. **Authentication**: Bảo vệ thông tin xác thực và đảm bảo không để lộ API tokens
-   - Sử dụng biến môi trường cho thông tin nhạy cảm
-   - Không log thông tin xác thực
-6. **Cấu trúc dự án**: Phân tách rõ ràng các module, utils và tools để dễ bảo trì và mở rộng
-   - Mỗi công cụ có file riêng
-   - Tái sử dụng mã thông qua các utils
-   - Tách biệt logic nghiệp vụ và MCP Protocol
-7. **Sử dụng TypeScript interfaces**: Xác định rõ cấu trúc dữ liệu cho API request/response
-   - Định nghĩa interfaces riêng cho từng API
-   - Sử dụng TypeScript generics cho các hàm API
-   - Viết rõ các ghi chú JSDoc
-8. **Logging nhất quán**: Cài đặt hệ thống logging chuẩn hóa xuyên suốt dự án
-   - Log mức thông tin phù hợp (debug, info, warning, error)
-   - Bao gồm thông tin ngữ cảnh trong log
-   - Format log để dễ theo dõi và tìm kiếm
-9. **Unit testing**: Viết tests cho từng module riêng lẻ trước khi tích hợp
-   - Test các trường hợp thành công và thất bại
-   - Sử dụng mock cho API calls
-   - Kiểm tra đầu vào/đầu ra của các hàm
-10. **MCP Protocol Conformance**: Đảm bảo tuân thủ đúng định dạng MCP
-    - Sử dụng helper functions để tạo response đúng định dạng
-    - Kiểm tra schema đầu vào/đầu ra
-    - Xử lý lỗi theo chuẩn MCP
-11. **Nullable/Optional Handling**: Xử lý cẩn thận các trường có thể null/undefined
-    - Sử dụng optional chaining (?.)
-    - Thiết lập giá trị mặc định
-    - Kiểm tra tính hợp lệ của dữ liệu trước khi sử dụng
-12. **Context Management**: Quản lý và truyền context hiệu quả
-    - Sử dụng map để lưu trữ cấu hình và trạng thái
-    - Truyền context qua các handler function
-    - Kiểm tra xác thực context trước khi sử dụng
+4. **Headers**: Đảm bảo tất cả các headers cần thiết đều được đưa vào requests
+   - User-Agent là bắt buộc để tránh bị chặn bởi Cloudfront
+   - Content-Type phải chính xác (application/json)
+   - Accept nên được thiết lập phù hợp (application/json)
+5. **URL Construction**: Cẩn thận khi tạo URL đảm bảo đúng định dạng và mã hóa
+   - Đảm bảo bao gồm đầy đủ các phần của URL (ví dụ: "/wiki" trong URL Confluence)
+   - Sử dụng encodeURIComponent cho các tham số trong URL
+   - Xác minh domain của Atlassian Cloud (example.atlassian.net)
+
+### Error Handling
+1. **Error Categorization**: Phân loại lỗi rõ ràng theo loại
+   - Lỗi API (400, 401, 403, 404, 429, 500)
+   - Lỗi xác thực (Authentication Error)
+   - Lỗi ủy quyền (Authorization Error)
+   - Lỗi validation (Validation Error)
+   - Lỗi server (Server Error)
+   - Lỗi client (Client Error)
+2. **Error Response**: Đảm bảo phản hồi lỗi có đầy đủ thông tin
+   - Bao gồm mã lỗi HTTP
+   - Mô tả lỗi rõ ràng
+   - Hướng dẫn khắc phục nếu có thể
+   - Tham chiếu lỗi để dễ tìm trong logs
+3. **Retry Mechanism**: Triển khai cơ chế thử lại cho các lỗi tạm thời
+   - Thử lại với backoff nhẹ cho lỗi 429 (Rate Limit)
+   - Thử lại với jitter để tránh thundering herd
+
+### Response Formatting
+1. **Consistency**: Đảm bảo nhất quán trong định dạng phản hồi
+   - Luôn bao gồm trường `success` để chỉ ra kết quả
+   - Luôn bao gồm trường `message` để mô tả kết quả
+   - Sử dụng cùng cấu trúc cho tất cả các công cụ
+2. **Content vs Data**: Tách biệt rõ ràng giữa nội dung hiển thị và dữ liệu
+   - Content để hiển thị cho người dùng
+   - Data để sử dụng trong code
+3. **URLS**: Đảm bảo tất cả các URL đều đầy đủ và chính xác
+   - Bao gồm protocol (https://)
+   - Bao gồm đầy đủ đường dẫn (/wiki/spaces/...)
+   - Mã hóa các ký tự đặc biệt trong URL
+
+### Context Management
+1. **Context Access**: Truy cập context theo cách phù hợp với SDK
+   - Sử dụng `(context as any).propertyName` thay vì `context.get('propertyName')` nếu SDK đã thay đổi
+   - Kiểm tra null/undefined trước khi truy cập properties
+2. **Context Initialization**: Đảm bảo context được khởi tạo đúng
+   - Thiết lập các giá trị mặc định
+   - Đảm bảo tính khả dụng của tất cả giá trị cần thiết
+
+### Testing
+1. **End-to-End Testing**: Kiểm thử toàn bộ quy trình
+   - Xác minh tất cả các công cụ đều hoạt động đúng
+   - Kiểm tra tương tác giữa các công cụ
+   - Xác minh URL, thông báo, và kết quả trả về
+2. **Environment Variables**: Sử dụng biến môi trường cho cấu hình
+   - Tách biệt cấu hình theo môi trường (dev, test, prod)
+   - Không hardcode thông tin nhạy cảm
+   - Sử dụng .env.example để hướng dẫn người dùng
 
 ## Roadmap phát triển tương lai
+
+### Tính năng API mới
 1. **Tích hợp thêm các công cụ Atlassian**:
    - BitBucket for code management
    - Trello for task management
    - ServiceDesk for customer support
    - Bamboo và Opsgenie cho CI/CD và incident management
 
-2. **Cải thiện hiệu suất**:
+2. **Mở rộng các API hiện có**:
+   - Thêm tùy chọn mở rộng cho getPage (lấy thêm thông tin về ancestors, descendants)
+   - Thêm hỗ trợ cho update nhiều fields cùng lúc
+   - Thêm hỗ trợ bulk operations (create/update nhiều issues cùng lúc)
+
+### Cải tiến hiệu suất
+1. **Caching và Optimizations**:
    - Caching đáp ứng với Redis hoặc Memcached
    - Parallel API calls
    - Batch requests
    - Streaming responses
 
-3. **Tăng cường trải nghiệm người dùng**:
-   - Streaming API responses
-   - Progress indicators
-   - Định dạng response thân thiện hơn
-   - Nhất quán trong cách hiển thị kết quả
+2. **Rate Limiting thông minh**:
+   - Đo lường và quản lý tỉ lệ sử dụng API
+   - Adaptive rate limiting dựa trên phản hồi từ server
+   - Ưu tiên các yêu cầu quan trọng
 
-4. **Nâng cao bảo mật**:
+### Tăng cường bảo mật
+1. **Authentication và Authorization**:
    - Hỗ trợ multiple authentication methods (Basic, OAuth)
    - Encryption cho data at rest
    - Giới hạn phạm vi truy cập (scopes)
    - Audit logging
 
-5. **Mở rộng tích hợp**:
-   - Webhook support
-   - WebSocket real-time updates
-   - Event-driven architecture
-   - Hỗ trợ plugin và mở rộng 
+2. **Data Protection**:
+   - Masking dữ liệu nhạy cảm trong logs
+   - Sanitizing dữ liệu đầu vào
+   - Content security policies
+
+### DevOps và deployment
+1. **Containerization**:
+   - Docker images cho dễ dàng triển khai
+   - Kubernetes manifests cho orchestration
+   - Health checks và readiness probes
+
+2. **Monitoring và Observability**:
+   - Prometheus metrics
+   - Grafana dashboards
+   - Distributed tracing với OpenTelemetry
+   - Alerting cho các vấn đề quan trọng 

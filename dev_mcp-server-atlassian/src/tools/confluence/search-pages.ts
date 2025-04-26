@@ -64,7 +64,7 @@ export async function searchPagesHandler(
       type: page.type,
       spaceKey: page.space?.key || '',
       spaceName: page.space?.name || '',
-      url: `${config.baseUrl}${page._links.webui}`,
+      url: `${config.baseUrl}/wiki${page._links.webui}`,
       lastUpdated: page.history?.lastUpdated?.when || ''
     }));
     
@@ -96,8 +96,8 @@ export const registerSearchPagesTool = (server: McpServer) => {
     searchPagesSchema.shape,
     async (params: SearchPagesParams, context: Record<string, any>): Promise<McpResponse> => {
       try {
-        // Lấy cấu hình Atlassian từ context
-        const config = context.get('atlassianConfig') as AtlassianConfig;
+        // Lấy cấu hình Atlassian từ context (cập nhật cách truy cập)
+        const config = (context as any).atlassianConfig as AtlassianConfig;
         
         if (!config) {
           return createErrorResponse('Cấu hình Atlassian không hợp lệ hoặc không tìm thấy');

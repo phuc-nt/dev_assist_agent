@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { callJiraApi } from '../../utils/atlassian-api.js';
-import { AtlassianConfig } from '../../utils/atlassian-api.js';
+import { AtlassianConfig, createIssue } from '../../utils/atlassian-api.js';
 import { ApiError, ApiErrorType } from '../../utils/error-handler.js';
 import { Logger } from '../../utils/logger.js';
 import { JiraIssueType } from '../../utils/jira-interfaces.js';
@@ -57,60 +56,43 @@ export async function createIssueHandler(
   try {
     logger.info(`Creating new issue in project: ${params.projectKey}`);
     
-    // Chuẩn bị dữ liệu cho API call
-    const requestData: any = {
-      fields: {
-        project: {
-          key: params.projectKey
-        },
-        summary: params.summary,
-        issuetype: {
-          name: params.issueType
-        }
-      }
-    };
-    
-    // Thêm mô tả nếu có
-    if (params.description) {
-      requestData.fields.description = textToAdf(params.description);
-    }
+    // Xây dựng additionalFields từ các tham số tùy chọn
+    const additionalFields: Record<string, any> = {};
     
     // Thêm priority nếu có
     if (params.priority) {
-      requestData.fields.priority = {
+      additionalFields.priority = {
         name: params.priority
       };
     }
     
     // Thêm assignee nếu có
     if (params.assignee) {
-      requestData.fields.assignee = {
+      additionalFields.assignee = {
         name: params.assignee
       };
     }
     
     // Thêm labels nếu có
     if (params.labels && params.labels.length > 0) {
-      requestData.fields.labels = params.labels;
+      additionalFields.labels = params.labels;
     }
     
-    // Gọi Jira API để tạo issue
-    const response = await callJiraApi<{
-      id: string;
-      key: string;
-      self: string;
-    }>(
+    // Gọi hàm createIssue thay vì callJiraApi
+    const newIssue = await createIssue(
       config,
-      '/issue',
-      'POST',
-      requestData
+      params.projectKey,
+      params.summary,
+      params.description,
+      params.issueType,
+      additionalFields
     );
     
     // Trả về kết quả
     return {
-      id: response.id,
-      key: response.key,
-      self: response.self,
+      id: newIssue.id,
+      key: newIssue.key,
+      self: newIssue.self,
       success: true
     };
   } catch (error) {
@@ -135,8 +117,8 @@ export const registerCreateIssueTool = (server: McpServer) => {
     createIssueSchema.shape,
     async (params: CreateIssueParams, context: Record<string, any>): Promise<McpResponse> => {
       try {
-        // Lấy cấu hình Atlassian từ context
-        const config = context.get('atlassianConfig') as AtlassianConfig;
+        // Lấy cấu hình Atlassian từ context (cập nhật cách lấy context)
+        const config = (context as any).atlassianConfig as AtlassianConfig;
         
         if (!config) {
           return createErrorResponse('Cấu hình Atlassian không hợp lệ hoặc không tìm thấy');

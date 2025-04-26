@@ -68,7 +68,7 @@ export async function createPageHandler(
       requestData
     );
     
-    // Trả về kết quả
+    // Tạo kết quả trả về cho Tool
     return {
       id: response.id,
       key: response.key || '',
@@ -99,8 +99,8 @@ export const registerCreatePageTool = (server: McpServer) => {
     createPageSchema.shape,
     async (params: CreatePageParams, context: Record<string, any>): Promise<McpResponse> => {
       try {
-        // Lấy cấu hình Atlassian từ context
-        const config = context.get('atlassianConfig') as AtlassianConfig;
+        // Lấy cấu hình Atlassian từ context (cập nhật cách truy cập)
+        const config = (context as any).atlassianConfig as AtlassianConfig;
         
         if (!config) {
           return createErrorResponse('Cấu hình Atlassian không hợp lệ hoặc không tìm thấy');
@@ -109,12 +109,12 @@ export const registerCreatePageTool = (server: McpServer) => {
         const result = await createPageHandler(params, config);
         
         return createTextResponse(
-          `Đã tạo trang "${result.title}" thành công trong space ${params.spaceKey}. URL: ${config.baseUrl}${result.webui}`,
+          `Đã tạo trang "${result.title}" thành công trong space ${params.spaceKey}. URL: ${config.baseUrl}/wiki/spaces/${params.spaceKey}/pages/${result.id}/${encodeURIComponent(result.title.replace(/ /g, '+'))}`,
           {
             id: result.id,
             title: result.title,
             spaceKey: params.spaceKey,
-            url: `${config.baseUrl}${result.webui}`,
+            url: `${config.baseUrl}/wiki/spaces/${params.spaceKey}/pages/${result.id}/${encodeURIComponent(result.title.replace(/ /g, '+'))}`,
             success: result.success
           }
         );
