@@ -118,30 +118,40 @@ wrapToolHandler(registerUpdatePageTool);
 wrapToolHandler(registerGetSpacesTool);
 wrapToolHandler(registerAddCommentTool);
 
-// Khởi động server với STDIO transport
-const transport = new StdioServerTransport();
-server.connect(transport)
-  .then(() => logger.info('MCP Atlassian Server started successfully'))
-  .catch(error => logger.error('Failed to start MCP Server:', error));
+// Khởi động server dựa trên loại transport được cấu hình
+async function startServer() {
+  try {
+    // Luôn sử dụng STDIO transport cho độ tin cậy cao nhất
+    const stdioTransport = new StdioServerTransport();
+    await server.connect(stdioTransport);
+    logger.info('MCP Atlassian Server started with STDIO transport');
 
-// In thông tin khởi động
-logger.info(`MCP Server Name: ${process.env.MCP_SERVER_NAME || 'mcp-atlassian-integration'}`);
-logger.info(`MCP Server Version: ${process.env.MCP_SERVER_VERSION || '1.0.0'}`);
-logger.info(`Connected to Atlassian site: ${ATLASSIAN_SITE_NAME}`);
-logger.info('Registered tools:');
+    // In thông tin khởi động
+    logger.info(`MCP Server Name: ${process.env.MCP_SERVER_NAME || 'mcp-atlassian-integration'}`);
+    logger.info(`MCP Server Version: ${process.env.MCP_SERVER_VERSION || '1.0.0'}`);
+    logger.info(`Connected to Atlassian site: ${ATLASSIAN_SITE_NAME}`);
+    logger.info('Registered tools:');
 
-// Jira tools
-logger.info('- getIssue (Jira)');
-logger.info('- searchIssues (Jira)');
-logger.info('- createIssue (Jira)');
-logger.info('- updateIssue (Jira)');
-logger.info('- transitionIssue (Jira)');
-logger.info('- assignIssue (Jira)');
+    // Jira tools
+    logger.info('- getIssue (Jira)');
+    logger.info('- searchIssues (Jira)');
+    logger.info('- createIssue (Jira)');
+    logger.info('- updateIssue (Jira)');
+    logger.info('- transitionIssue (Jira)');
+    logger.info('- assignIssue (Jira)');
 
-// Confluence tools
-logger.info('- createPage (Confluence)');
-logger.info('- getPage (Confluence)');
-logger.info('- searchPages (Confluence)');
-logger.info('- updatePage (Confluence)');
-logger.info('- getSpaces (Confluence)');
-logger.info('- addComment (Confluence)'); 
+    // Confluence tools
+    logger.info('- createPage (Confluence)');
+    logger.info('- getPage (Confluence)');
+    logger.info('- searchPages (Confluence)');
+    logger.info('- updatePage (Confluence)');
+    logger.info('- getSpaces (Confluence)');
+    logger.info('- addComment (Confluence)');
+  } catch (error) {
+    logger.error('Failed to start MCP Server:', error);
+    process.exit(1);
+  }
+}
+
+// Khởi động server
+startServer(); 

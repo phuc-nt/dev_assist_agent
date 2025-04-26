@@ -121,11 +121,17 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
 - [ ] Cài đặt logging cho mọi requests và responses
 - [ ] Thiết lập cơ chế bảo mật cho tokens và credentials
 
-### Phase 12: Dockerization và Deployment
-- [ ] Tạo Dockerfile
-- [ ] Thiết lập Docker Compose cho môi trường phát triển
-- [ ] Tạo CI/CD pipeline
-- [ ] Chuẩn bị tài liệu hướng dẫn triển khai
+### Phase 12: Dockerization và Deployment (Hoàn thành)
+- [x] Tạo Dockerfile
+- [x] Thiết lập Docker Compose cho môi trường phát triển
+- [x] Tạo script quản lý Docker (start-docker.sh)
+- [x] Đơn giản hóa quá trình triển khai
+  - [x] Chỉ sử dụng STDIO transport cho độ tin cậy cao nhất
+  - [x] Tạo một container duy nhất cho mỗi instance
+  - [x] Cung cấp hướng dẫn rõ ràng cho kết nối với Cline
+- [x] Chuẩn bị tài liệu hướng dẫn triển khai
+  - [x] Cập nhật README.md với hướng dẫn cài đặt và sử dụng
+  - [x] Cập nhật tài liệu xử lý sự cố phổ biến
 
 ## Vấn đề đã phát hiện và giải quyết
 
@@ -187,6 +193,37 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
   - Đã thêm trường message vào JSON response của tất cả các công cụ
   - Đã đảm bảo thông báo phản hồi nhất quán và có ý nghĩa
   - Đã kiểm tra và xác nhận tất cả các thông báo phản hồi hiển thị đúng
+
+### Vấn đề với SSE Transport (Đã giải quyết)
+- **Mô tả**: SSE Transport gặp nhiều vấn đề khi triển khai trong Docker, dẫn đến các lỗi kết nối và không tìm thấy công cụ.
+- **Nguyên nhân đã xác định**:
+  - SSE Transport có cấu hình phức tạp và yêu cầu HTTP server
+  - Port binding dễ xung đột với các dịch vụ khác
+  - Cấu hình URL trong Cline dễ gây nhầm lẫn
+
+- **Giải pháp đã thực hiện**:
+  - Đã chuyển đổi hoàn toàn sang STDIO transport
+  - Đã loại bỏ HTTP server để tránh xung đột port
+  - Đã đơn giản hóa cấu hình Docker Compose chỉ với một container
+  - Đã cải thiện script quản lý Docker để dễ sử dụng hơn
+  - Đã cập nhật tài liệu với hướng dẫn kết nối rõ ràng
+
+### Best Practices cho Docker Deployment
+
+1. **Container Configuration**:
+   - Sử dụng STDIO transport cho kết nối đáng tin cậy
+   - Mount file .env để quản lý cấu hình dễ dàng
+   - Sử dụng restart policy để tự động khởi động lại khi cần
+
+2. **Resource Management**:
+   - Sử dụng node:18-slim làm base image để tối ưu kích thước
+   - Cài đặt dependencies trong bước build để tránh cài đặt lại
+   - Chạy ứng dụng dưới quyền non-root (khuyến nghị cho triển khai production)
+
+3. **Security**:
+   - Sử dụng volumes để bảo vệ thông tin nhạy cảm
+   - Không hardcode thông tin xác thực trong Docker Compose
+   - Sử dụng Docker secrets cho môi trường production
 
 ## Chi tiết triển khai các API chính
 
@@ -316,7 +353,7 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
 2. **Prompt Engineering**:
    - Thiết kế cấu trúc prompt rõ ràng với các trường bắt buộc và tùy chọn
    - Áp dụng validation để đảm bảo prompt đáp ứng các yêu cầu kỹ thuật
-   - Tạo template cho các loại prompt thông dụng để tăng hiệu quả
+   - Tạo template cho các loại prompt phổ biến để tăng hiệu quả
    - Triển khai hệ thống gợi ý để cải thiện prompt không rõ ràng
 
 3. **Sampling Optimization**:

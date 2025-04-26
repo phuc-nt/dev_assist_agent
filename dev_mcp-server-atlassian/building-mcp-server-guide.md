@@ -429,19 +429,17 @@ flowchart LR
 
 #### Cấu Hình Cline Cho MCP Server
 
+MCP Server hỗ trợ nhiều phương thức kết nối, nhưng phương thức STDIO (Standard Input/Output) được khuyến nghị vì độ tin cậy cao nhất. Đặc biệt khi triển khai trong Docker, STDIO transport đơn giản và ít xảy ra lỗi nhất.
+
 Bạn cần cấu hình trong file `cline_mcp_settings.json`:
 
 ```json
 {
   "mcpServers": {
     "nphuc/atlassian-integration": {
-      "command": "node",
-      "args": ["/đường/dẫn/đầy/đủ/đến/dist/index.js"],
-      "env": {
-        "ATLASSIAN_SITE_NAME": "phuc-nt.atlassian.net",
-        "ATLASSIAN_USER_EMAIL": "example@gmail.com",
-        "ATLASSIAN_API_TOKEN": "your-api-token"
-      }
+      "command": "docker",
+      "args": ["exec", "-i", "mcp-atlassian", "node", "dist/index.js"],
+      "env": {}
     }
   }
 }
@@ -453,22 +451,47 @@ Bạn cần cấu hình trong file `cline_mcp_settings.json`:
    - Chạy lệnh `npm run build`
    - Đảm bảo file JavaScript đã được tạo trong thư mục `dist/`
 
-2. **Cấu Hình Cline**:
+2. **Triển khai với Docker**:
+   - Tạo file `docker-compose.yml` và `Dockerfile`
+   - Tạo script `start-docker.sh` để quản lý container
+   - Chạy `./start-docker.sh` và chọn "Chạy MCP Server"
+
+3. **Cấu Hình Cline**:
    - Tạo hoặc cập nhật file `cline_mcp_settings.json`
-   - Chỉ định đường dẫn đầy đủ đến file `dist/index.js`
-   - Thiết lập các biến môi trường cần thiết
+   - Sử dụng cấu hình command với exec để kết nối đến container
+   - Không cần thiết lập lại các biến môi trường trong cấu hình này
 
-3. **Sử Dụng MCP Server trong Cline**:
-   - Cline sẽ tự động khởi động MCP Server khi cần
-   - Không cần phải chạy lệnh `npm start` thủ công
-   - Cline quản lý vòng đời của MCP Server
+4. **Sử Dụng MCP Server trong Cline**:
+   - Cline sẽ tự động khởi động kết nối tới Docker container
+   - MCP Server sẽ đọc cấu hình từ file `.env` trong container
+   - Các công cụ Jira và Confluence sẽ hiển thị trong Cline
 
-#### Lợi Ích Của Cline Với MCP Server
+#### Lợi Ích Sử Dụng Docker Với STDIO Transport
 
-- **Mở Rộng Khả Năng**: Truy cập dữ liệu Atlassian thời gian thực
-- **Tự Động Hóa**: Xử lý các tích hợp Jira và Confluence phức tạp
-- **Tăng Năng Suất**: Giảm thiểu công việc lặp lại khi làm việc với Atlassian
-- **Tùy Chỉnh Quy Trình**: Tạo các quy trình làm việc riêng với Jira/Confluence
+- **Độ Tin Cậy Cao**: STDIO transport ít có khả năng gặp vấn đề kết nối
+- **Tách Biệt Môi Trường**: Container cung cấp môi trường độc lập và nhất quán
+- **Quản Lý Cấu Hình Đơn Giản**: Thông tin xác thực được lưu trong file `.env`
+- **Dễ Dàng Nâng Cấp**: Container có thể được cập nhật mà không ảnh hưởng đến hệ thống
+- **Tăng Tính Di Động**: Dễ dàng triển khai trên nhiều máy tính khác nhau
+
+#### Xử Lý Sự Cố Kết Nối
+
+Nếu bạn gặp vấn đề khi kết nối MCP Server với Cline, hãy kiểm tra:
+
+1. **Container phải đang chạy**:
+   ```bash
+   docker ps --filter "name=mcp-atlassian"
+   ```
+
+2. **Kiểm tra logs của container**:
+   ```bash
+   docker logs mcp-atlassian
+   ```
+
+3. **Đảm bảo thông tin xác thực chính xác**:
+   - Kiểm tra file `.env` đã được mount đúng
+   - Xác nhận Atlassian API token còn hiệu lực
+   - Đảm bảo tài khoản Atlassian có quyền truy cập API
 
 ### 7.2. Tích Hợp Với Web Applications
 
