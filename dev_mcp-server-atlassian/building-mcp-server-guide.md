@@ -612,3 +612,42 @@ Lợi ích của việc sử dụng MCP:
 - **Đơn giản hóa** việc tương tác giữa AI và hệ thống bên ngoài
 
 Với hướng dẫn này, bạn đã có nền tảng vững chắc để xây dựng MCP Server cho bất kỳ dịch vụ API nào, tạo nên một hệ sinh thái mạnh mẽ để mở rộng khả năng của các trợ lý AI.
+
+---
+
+## Kế Hoạch Cải Tiến Hướng Dẫn
+
+Dựa trên đánh giá và phản hồi từ các chuyên gia, chúng tôi đã xác định một số điểm cần cải tiến để làm cho hướng dẫn này toàn diện và chính xác hơn. Dưới đây là kế hoạch cải tiến:
+
+### 1. Cập Nhật Kiến Trúc MCP Đầy Đủ
+
+- **Bổ sung thành phần Host Application**: Tài liệu hiện tại mô tả 3 thành phần (Client, Transport, Server), nhưng kiến trúc chuẩn của MCP gồm 4 thành phần chính.
+- **Làm rõ sự phân biệt giữa Host và Client**: Host là ứng dụng mà người dùng tương tác trực tiếp, trong khi Client là thành phần kỹ thuật được nhúng trong Host.
+- **Chi tiết**: Xem thêm tại [building-mcp-server-guide-improve-1.md](dev_mcp-server-atlassian/building-mcp-server-guide-improve-1.md)
+
+### 2. Bổ Sung Các Capabilities Của MCP
+
+- **Thêm Resources**: Mô tả về cơ chế cung cấp dữ liệu có cấu trúc từ MCP Server cho AI thông qua MCP Client.
+- **Thêm Prompts**: Giải thích về template tin nhắn được định nghĩa bởi server để chuẩn hóa tương tác với LLM.
+- **Thêm Sampling**: Mô tả tính năng cho phép server yêu cầu hoàn thành từ mô hình LLM.
+- **Chi tiết**: Xem thêm tại [building-mcp-server-guide-improve-2.md](dev_mcp-server-atlassian/building-mcp-server-guide-improve-2.md)
+
+### 3. Cải Thiện Ví Dụ và Minh Họa
+
+- Bổ sung ví dụ cụ thể với Jira và Confluence, minh họa luồng xử lý hoàn chỉnh
+- Cung cấp ví dụ về việc định nghĩa và sử dụng Resources, Prompts, và Sampling
+- Làm rõ sự khác biệt giữa các loại capabilities
+
+### 4. Điều Chỉnh Nội Dung Hiện Có
+
+- Cập nhật phần "Thành Phần Chính Của MCP" để phản ánh đúng kiến trúc 4 thành phần
+- Bổ sung diagram minh họa cho các capabilities mới (Resources, Prompts, Sampling)
+- Cập nhật luồng xử lý để bao gồm các khả năng mới
+
+Chúng tôi dự định triển khai những cải tiến này trong bản cập nhật tiếp theo của hướng dẫn, nhằm cung cấp một tài liệu toàn diện và cập nhật về cách xây dựng MCP Server.
+
+### Tài Liệu Tham Khảo
+
+- [Đánh giá từ chuyên gia](dev_mcp-server-atlassian/building-mcp-server-guide-evaluation.md)
+- [Cải tiến phần 1: Kiến trúc và Capabilities](dev_mcp-server-atlassian/building-mcp-server-guide-improve-1.md)
+- [Cải tiến phần 2: Resources và Prompts](dev_mcp-server-atlassian/building-mcp-server-guide-improve-2.md)

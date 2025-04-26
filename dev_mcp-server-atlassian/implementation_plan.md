@@ -91,12 +91,29 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
 - [ ] Cải thiện error handling và retry logic
 - [ ] Thêm các authentication methods bổ sung (OAuth)
 - [ ] Cập nhật documentation cho tất cả APIs
+- [ ] Triển khai MCP Resources Capability
+  - [ ] Xác định loại tài nguyên Atlassian (Issues, Pages, Spaces)
+  - [ ] Tạo schema cho mỗi loại tài nguyên
+  - [ ] Triển khai endpoints liệt kê tài nguyên
+  - [ ] Triển khai caching cho resources
+- [ ] Triển khai MCP Prompts Capability
+  - [ ] Thiết kế cấu trúc prompt chuẩn cho Atlassian
+  - [ ] Tạo hệ thống xử lý và routing prompt
+  - [ ] Phát triển prompt history và suggestion system
+- [ ] Triển khai MCP Sampling Capability
+  - [ ] Cài đặt tham số sampling cơ bản (temperature, top_k, top_p)
+  - [ ] Phát triển chiến lược sampling cho dữ liệu Atlassian
+  - [ ] Tạo API để client điều chỉnh sampling parameters
 
 ### Phase 10: Tích hợp với DevAssist Central Agent
 - [ ] Tạo interface giữa MCP Server và Central Agent
 - [ ] Cập nhật mock agents trong Central Agent để sử dụng MCP Server
 - [ ] Viết integration test giữa Central Agent và MCP Server
 - [ ] Cập nhật cấu hình để Central Agent có thể sử dụng MCP Server
+- [ ] Tích hợp MCP capabilities mới với Central Agent
+  - [ ] Kết nối Resources API với Central Agent
+  - [ ] Hỗ trợ Prompt processing trong Central Agent
+  - [ ] Triển khai Sampling controls trong Central Agent
 
 ### Phase 11: Triển khai Security và Monitoring
 - [ ] Triển khai rate limiting để tránh quá tải API
@@ -289,6 +306,25 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
    - Không hardcode thông tin nhạy cảm
    - Sử dụng .env.example để hướng dẫn người dùng
 
+### MCP Capabilities
+1. **Resources Management**: 
+   - Xác định tài nguyên rõ ràng với ID và schema cụ thể
+   - Thiết kế API endpoints nhất quán cho tất cả tài nguyên
+   - Triển khai kiểm soát truy cập chi tiết cho từng loại tài nguyên
+   - Áp dụng caching thông minh để giảm tải API và tăng tốc độ truy cập
+
+2. **Prompt Engineering**:
+   - Thiết kế cấu trúc prompt rõ ràng với các trường bắt buộc và tùy chọn
+   - Áp dụng validation để đảm bảo prompt đáp ứng các yêu cầu kỹ thuật
+   - Tạo template cho các loại prompt thông dụng để tăng hiệu quả
+   - Triển khai hệ thống gợi ý để cải thiện prompt không rõ ràng
+
+3. **Sampling Optimization**:
+   - Điều chỉnh sampling parameters phù hợp với từng loại dữ liệu
+   - Cân bằng giữa độ chính xác và đa dạng trong kết quả
+   - Thu thập feedback để cải thiện chiến lược sampling theo thời gian
+   - Triển khai các chỉ số đánh giá chất lượng sampling
+
 ## Roadmap phát triển tương lai
 
 ### Tính năng API mới
@@ -338,3 +374,101 @@ Kế hoạch triển khai Atlassian Agent (bao gồm Jira Agent và Confluence A
    - Grafana dashboards
    - Distributed tracing với OpenTelemetry
    - Alerting cho các vấn đề quan trọng 
+
+## Triển khai các MCP Server Capabilities
+
+Dựa trên kiến trúc đầy đủ của MCP, chúng ta cần bổ sung và triển khai các capabilities quan trọng sau đây vào server hiện tại:
+
+### 1. Resources
+
+Resources là các tài nguyên mà agent có thể truy cập và sử dụng thông qua MCP Server. Việc triển khai Resources đóng vai trò quan trọng trong kiến trúc MCP:
+
+- **Định nghĩa Resources**:
+  - Xác định các loại tài nguyên Atlassian có thể truy cập (Issues, Pages, Spaces, Projects)
+  - Tạo schema cho mỗi loại tài nguyên để xác thực và mô tả
+  - Phân loại resources theo domain (Jira, Confluence, Admin)
+
+- **Triển khai Resource API**:
+  - Tạo endpoints cho việc liệt kê các resources có sẵn
+  - Xây dựng hệ thống kiểm soát truy cập cho từng loại resource
+  - Quản lý metadata của resources (usage limits, descriptions, permissions)
+
+- **Quản lý Resource Cache**:
+  - Triển khai caching cho resources thường xuyên truy cập
+  - Thiết lập cơ chế invalidation cache hiệu quả
+  - Theo dõi resource usage và optimize performance
+
+### 2. Prompts
+
+Prompts là các yêu cầu được gửi đến MCP Server để xử lý. Việc quản lý và định dạng prompts đúng cách sẽ cải thiện khả năng tương tác:
+
+- **Định nghĩa Prompt Schemas**:
+  - Thiết kế cấu trúc prompt chuẩn cho các tác vụ Atlassian
+  - Xác định các thành phần bắt buộc và tùy chọn của prompt
+  - Tạo templates cho các loại prompt phổ biến (issue creation, page search)
+
+- **Xử lý Prompt**:
+  - Xây dựng logic để phân tích và hiểu prompt từ user
+  - Triển khai validation và normalization cho prompts
+  - Phát triển hệ thống routing để chuyển prompt đến tool handler phù hợp
+
+- **Tối ưu hóa Prompt**:
+  - Xây dựng cơ chế gợi ý để cải thiện prompts không rõ ràng
+  - Triển khai prompt history để học từ các tương tác trước đó
+  - Phát triển khả năng phản hồi incremental cho prompts phức tạp
+
+### 3. Sampling
+
+Sampling cho phép MCP Server tạo ra các phản hồi đa dạng và phù hợp với yêu cầu cụ thể:
+
+- **Cài đặt Sampling Parameters**:
+  - Xác định các tham số sampling cơ bản (temperature, top_k, top_p)
+  - Thiết lập sampling configuration mặc định cho từng loại tool
+  - Xây dựng API để client có thể điều chỉnh sampling parameters
+
+- **Triển khai Sampling Strategies**:
+  - Phát triển thuật toán để tạo responses đa dạng và hữu ích
+  - Cài đặt các chiến lược sampling khác nhau cho các loại dữ liệu khác nhau
+  - Triển khai cơ chế để cân bằng giữa độ chính xác và đa dạng
+
+- **Đánh giá và Cải thiện Sampling**:
+  - Thu thập phản hồi về chất lượng các responses được sampling
+  - Phân tích hiệu suất của các chiến lược sampling khác nhau
+  - Tối ưu hóa sampling parameters dựa trên phản hồi người dùng
+
+## Kế hoạch triển khai chi tiết
+
+### Phase 1: Thiết kế và lập kế hoạch (1-2 tuần)
+- Phân tích yêu cầu chi tiết cho mỗi capability
+- Thiết kế kiến trúc và các giao diện API
+- Xác định các dependencies và công nghệ cần thiết
+
+### Phase 2: Triển khai Resources (2-3 tuần)
+- Xây dựng schema và API cho resources
+- Tích hợp với hệ thống quản lý tài nguyên Atlassian
+- Triển khai caching và access control
+
+### Phase 3: Triển khai Prompts (2-3 tuần)
+- Phát triển prompt schema và validation
+- Xây dựng hệ thống xử lý và routing prompt
+- Triển khai prompt history và suggestion system
+
+### Phase 4: Triển khai Sampling (1-2 tuần)
+- Cài đặt sampling parameters và configuration
+- Phát triển các chiến lược sampling
+- Xây dựng hệ thống đánh giá chất lượng sampling
+
+### Phase 5: Tích hợp và Kiểm thử (2 tuần)
+- Tích hợp tất cả các capabilities vào MCP Server
+- Kiểm thử toàn diện các tính năng
+- Tối ưu hóa hiệu suất và sửa lỗi
+
+### Phase 6: Triển khai và Giám sát (1 tuần)
+- Triển khai phiên bản mới với đầy đủ capabilities
+- Thiết lập hệ thống giám sát và đánh giá
+- Thu thập phản hồi từ người dùng và cải thiện liên tục
+
+## Tài liệu tham khảo
+- [MCP Server Architecture Documentation](https://github.com/user/mcp-server-docs)
+- [MCP Capabilities Guide](https://github.com/user/mcp-capabilities-guide)
+- [Model Context Protocol Specification](https://github.com/anthropics/anthropic-cookbook/tree/main/mcp) 
